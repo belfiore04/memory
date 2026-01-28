@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.db
+logs/
+.mem0/
+.qdrant_storage/
+.falkordb_data/
+.gemini/
+.vscode/
+.idea/
+*.pyc
+.DS_Store
