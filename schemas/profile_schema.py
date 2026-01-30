@@ -91,14 +91,7 @@ EXTRACTION_SLOTS: Dict[str, Dict] = {
         "examples": ["不要太粘人", "多说点脏话", "叫我主人"]
     },
     
-    # ==================== 当前状态 (4) ====================
-    "recent_focus": {
-        "description": "近期关注",
-        "definition": "用户最近在忙的事情",
-        "category": "当前状态",
-        "merge_strategy": "replace",
-        "examples": ["找工作", "考研", "减肥", "学习新技能"]
-    },
+    # ==================== 当前状态 (3) ====================
     "recent_mood": {
         "description": "近期情绪",
         "definition": "用户最近的情绪状态",

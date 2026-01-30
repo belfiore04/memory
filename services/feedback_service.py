@@ -10,12 +10,11 @@ logger = logging.getLogger(__name__)
 
 # 问题分类定义
 FEEDBACK_CATEGORIES = {
-    "memory_recall_miss": "没有回忆到应该有的记忆",
-    "style_dislike": "不喜欢说话风格",
-    "wrong_memory_stored": "存入的记忆不对",
-    "memory_store_miss": "没有记忆到应该记住的东西",
+    "memory_forget": "忘记了我想让他记住的东西",
+    "model_ooc": "模型不说人话/抽风/ooc",
     "other": "其他",
 }
+
 
 
 class FeedbackService:

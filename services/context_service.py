@@ -9,7 +9,7 @@ import json
 import sqlite3
 import logging
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from openai import OpenAI
 from langfuse import observe
@@ -39,6 +39,7 @@ class ContextService:
         
         # 配置
         self.max_history_rounds = 5  # 触发概括的对话轮数阈值（1轮 = user + assistant 各1条消息）
+        self.session_timeout_hours = 3  # 会话超时时间（小时），超过后自动清空摘要
         
     def _init_db(self):
         """初始化数据库表 (使用 user_id 替代 conversation_id)"""
@@ -62,14 +63,16 @@ class ContextService:
 
     def get_context(self, user_id: str) -> Dict:
         """
-        获取上下文：如果历史记录过长，会自动触发概括
+        获取上下文：
+        1. 如果会话超时（3小时），自动清空摘要
+        2. 如果历史记录过长，会自动触发概括
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
             cursor.execute(
-                "SELECT summary, recent_messages FROM user_context WHERE user_id = ?", 
+                "SELECT summary, recent_messages, updated_at FROM user_context WHERE user_id = ?", 
                 (user_id,)
             )
             row = cursor.fetchone()
@@ -83,6 +86,31 @@ class ContextService:
             
             summary = row[0] or ""
             recent_messages = json.loads(row[1]) if row[1] else []
+            updated_at_str = row[2]
+            
+            # [NEW] 检查会话是否超时
+            session_expired = False
+            if updated_at_str and summary:  # 只有有摘要时才需要检查
+                try:
+                    if isinstance(updated_at_str, str):
+                        updated_at = datetime.fromisoformat(updated_at_str)
+                    else:
+                        updated_at = updated_at_str
+                    
+                    if datetime.now() - updated_at > timedelta(hours=self.session_timeout_hours):
+                        session_expired = True
+                        logger.info(f"[Context] 会话超时（>{self.session_timeout_hours}h），清空摘要 user_id={user_id}")
+                except Exception as e:
+                    logger.warning(f"[Context] 解析 updated_at 失败: {e}")
+            
+            if session_expired:
+                # 清空摘要，保留 history
+                summary = ""
+                cursor.execute(
+                    "UPDATE user_context SET summary = '' WHERE user_id = ?",
+                    (user_id,)
+                )
+                conn.commit()
             
             # 计算轮数（每轮 = user + assistant 各1条，共2条消息）
             current_rounds = len(recent_messages) // 2
@@ -165,15 +193,19 @@ class ContextService:
         """
         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
         
-        prompt = f"""请对以下对话历史进行简要概括。
+        prompt = f"""请对以下对话历史进行简要概括。重点关注：                                                                                                     
+1. 讨论了什么话题                                                                                                                            
+2. 用户的情绪状态和需求（是想倾诉、求建议、还是闲聊）                                                                                        
+3. 有没有敏感/被回避的话题                                                                                                                   
+4. 对话是怎么结束的（自然结束、话题转移、用户情绪变化
         
 {f'已有摘要：{current_summary}' if current_summary else ''}
 
 新增对话：
 {history_text}
 
-请输出一个新的、合并后的摘要，包含关键信息（如用户意图、重要事实、讨论话题），字数控制在200字以内。
-直接输出摘要内容，不要包含"好的"等废话。"""
+请输出一个新的、合并后的摘要，包含关键信息（如用户意图、重要事实、讨论话题），字数控制在300字以内。
+直接输出摘要内容。"""
 
         try:
             response = self.client.chat.completions.create(
@@ -210,3 +242,18 @@ class ContextService:
             raise
         finally:
             conn.close()
+
+    def clear_summary(self, user_id: str):
+        """仅清空用户的摘要，保留对话历史"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE user_context SET summary = '' WHERE user_id = ?", (user_id,))
+            conn.commit()
+            logger.info(f"[Context] 摘要已清空 user_id={user_id}")
+        except Exception as e:
+            logger.error(f"[Context] 清空摘要失败: {str(e)}")
+            raise
+        finally:
+            conn.close()
+

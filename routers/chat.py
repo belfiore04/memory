@@ -11,7 +11,11 @@ from services.profile_service import ProfileService
 from services.chat_log_service import ChatLogService
 from services.trace_service import TraceService
 from services.feedback_service import FeedbackService
+from services.trace_service import TraceService
+from services.feedback_service import FeedbackService
+from services.focus_service import FocusService
 from agents.extraction_agent import ExtractionAgent
+from agents.whisperer_agent import WhispererAgent
 from schemas.common import MessageItem
 from routers.auth import get_current_user
 from datetime import datetime
@@ -28,8 +32,8 @@ def get_chat_llm_client() -> AsyncOpenAI:
     global _chat_llm_client
     if _chat_llm_client is None:
         _chat_llm_client = AsyncOpenAI(
-            api_key=os.getenv("DASHSCOPE_API_KEY"),
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key=os.getenv("MINIMAX_API_KEY"),
+            base_url="https://api.minimax.chat/v1",
         )
     return _chat_llm_client
 
@@ -87,6 +91,20 @@ def get_feedback_service() -> FeedbackService:
     if _feedback_service is None:
         _feedback_service = FeedbackService()
     return _feedback_service
+
+_focus_service: Optional[FocusService] = None
+def get_focus_service() -> FocusService:
+    global _focus_service
+    if _focus_service is None:
+        _focus_service = FocusService()
+    return _focus_service
+
+_whisperer_agent: Optional[WhispererAgent] = None
+def get_whisperer_agent() -> WhispererAgent:
+    global _whisperer_agent
+    if _whisperer_agent is None:
+        _whisperer_agent = WhispererAgent()
+    return _whisperer_agent
 
 # ==================== 请求/响应模型 ====================
 
@@ -175,6 +193,8 @@ async def _process_chat_background(
     profile_service: Any = None,
     memory_service: Any = None,
     trace_service: Any = None,
+    focus_service: Any = None,
+    whisperer_agent: Any = None,
     langfuse_trace_id: Optional[str] = None
 ):
     """
@@ -198,6 +218,8 @@ async def _process_chat_background(
             profile_service = profile_service or get_profile_service()
             memory_service = memory_service or get_memory_service()
             trace_service = trace_service or get_trace_service()
+            focus_service = focus_service or get_focus_service()
+            whisperer_agent = whisperer_agent or get_whisperer_agent()
             
             logger.info(f"[Background] 开始处理对话分析 user_id={user_id}, trace_id={langfuse_trace_id}")
     
@@ -264,12 +286,14 @@ async def _process_chat_background(
                     if recent_focus:
                         for focus in recent_focus:
                             trace_updates.append(f"近期关注: {focus.get('content')}")
-                            # 转换为 slot_update 结构以便后续 batch_update
-                            slot_updates.append({
-                                "slot": "recent_focus",
-                                "value": focus.get("content"),
-                                "evidence": focus.get("evidence")
-                            })
+                            # [MODIFY] 不再存入 Profile，而是存入 FocusService
+                            if focus_service:
+                                focus_service.add_focus(user_id, focus.get("content"))
+                            
+                    if trace_id and trace_updates:
+                        # Manually update custom trace service (sqlite)
+                         trace_service.update_trace_memories(trace_id, trace_updates)
+
                     if slot_updates:
                         # 将画像更新也作为"新记忆"的一类返回给前端 Trace，避免前端因 memory 为空而报错
                         for slot in slot_updates:
@@ -285,9 +309,50 @@ async def _process_chat_background(
                             await memory_service.add_memory_item(user_id, item.get("content"), item.get("type", "fact"))
 
                 # 3.2 执行画像更新
-                slot_updates = analysis_result.get("slot_updates", [])
                 if slot_updates:
                     profile_service.batch_update(user_id, slot_updates)
+            
+            # 4. [NEW] 耳语者异步分析 (N+1 策略)
+            with get_client().start_as_current_span(name="耳语者分析") as whisper_span:
+                # 获取所需上下文
+                # [MODIFY] 获取带时间信息的 focus 列表
+                active_focus = focus_service.get_active_focus_with_time(user_id)
+                current_profile = profile_service.get_all_slots(user_id)
+                
+                # 使用 context 的近期历史（包含摘要之后的多轮对话），而非只有当前一轮的 messages
+                recent_history = context_data.get("history", [])
+
+                # [NEW] 空载跳过逻辑：如果画像、焦点、历史均为空，则不激活耳语者
+                if not active_focus and not current_profile and len(recent_history) <= 2:
+                    logger.info(f"[Whisperer] 跳过分析 user_id={user_id}: 画像、焦点及历史均为空")
+                    return
+
+                # 确定当前时间 (优先使用 virtual_date)
+                from datetime import datetime
+                if virtual_date:
+                    current_time_str = f"{virtual_date} {datetime.now().strftime('%H:%M:%S')}"
+                else:
+                    current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                suggestion_result = whisperer_agent.create_suggestion(
+                    user_id=user_id,
+                    profile=current_profile,
+                    active_focus=active_focus,
+                    chat_summary=context_data.get("summary", ""),
+                    chat_history=recent_history,
+                    current_time=current_time_str
+                )
+                
+                # [MODIFY] 解包返回值
+                if suggestion_result:
+                    suggestion, used_focus_id = suggestion_result
+                    if suggestion:
+                        focus_service.save_whisper_suggestion(user_id, suggestion)
+                        
+                        # [NEW] 如果使用了特定 focus，标记为已注入 (触发 12h 冷却)
+                        if used_focus_id:
+                            focus_service.mark_focus_injected(used_focus_id)
+                            logger.info(f"[Whisperer] Focus {used_focus_id} 进入冷却期")
             
             logger.info(f"[Background] 分析完成 user_id={user_id}")
             
@@ -419,7 +484,9 @@ async def chat_interact(
     profile_service = Depends(get_profile_service),
     chat_log_service = Depends(get_chat_log_service),
     trace_service = Depends(get_trace_service),
-    extraction_agent = Depends(get_extraction_agent)
+    extraction_agent = Depends(get_extraction_agent),
+    focus_service = Depends(get_focus_service),
+    whisperer_agent = Depends(get_whisperer_agent)
 ):
     if current_user["id"] != user_id:
         raise HTTPException(status_code=403, detail="Forbidden: You can only access your own data")
@@ -446,6 +513,9 @@ async def chat_interact(
         
         # (c) Profile
         profile_slots = profile_service.get_all_slots(user_id)
+        
+        # (d) Whisper Suggestion (N+1, reading from previous turn)
+        whisper_suggestion = focus_service.get_latest_whisper(user_id)
         
         steps_latency["preparation"] = int((time.time() - t0) * 1000)
         
@@ -476,27 +546,49 @@ async def chat_interact(
             
         current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # 最终 Prompt (基于 n8n XML 结构但简化为更适合 API 的格式)
+        # 添加时段描述
+        hour = datetime.now().hour
+        if 5 <= hour < 12:
+            time_period = "上午"
+        elif 12 <= hour < 14:
+            time_period = "中午"
+        elif 14 <= hour < 18:
+            time_period = "下午"
+        elif 18 <= hour < 22:
+            time_period = "晚上"
+        else:
+            time_period = "深夜"
+        current_time_str = f"{current_time_str} ({time_period})"
+        
+        # 耳语注入 block (放在 task 之前，让模型更好注意)
+        whisper_block = ""
+        if whisper_suggestion:
+            whisper_block = f"\n<guidance>\n【耳语】{whisper_suggestion}\n</guidance>\n"
+        
+        # 最终 Prompt (基于 n8n XML 结构)
         final_system_prompt = f"""<role>
 {base_prompt}
 在此角色设定基础上，你必须严格按照特定格式输出：只输出回复内容字符串。
 </role>
 
-<environment>
-当前时间: {current_time_str}
-</environment>
 
 <context>
-{memory_block}
-{profile_block}
-{context_summary}
-{recent_history}
+{memory_block}{profile_block}{context_summary}{recent_history}
 </context>
 
 <output_format>
 严禁输出 Markdown 代码块标记（如 ```json），仅输出纯字符串。
 </output_format>
-"""
+{whisper_block}
+
+<environment>
+现在的时间是: {current_time_str}
+</environment>
+
+<task>
+用户对你说：{request.user_query}
+请根据上述要求生成回复：
+</task>"""
         steps_latency["prompt_assembly"] = int((time.time() - t0) * 1000)
 
         # 3. LLM Generation（使用独立客户端，不经过 Graphiti JSON patch）
@@ -508,11 +600,11 @@ async def chat_interact(
 
         with get_client().start_as_current_span(name="生成回复") as span:
             chat_client = get_chat_llm_client()
-            chat_model = os.getenv("ABILITY_MODEL", "qwen-max")
+            chat_model = "M2-her"
             llm_response = await chat_client.chat.completions.create(
                 model=chat_model,
                 messages=messages,
-                max_tokens=4096,
+                max_tokens=2048,
             )
 
             # 兼容 Langfuse AsyncOpenAI 包装器（返回 dict）和标准 OpenAI（返回 object）
@@ -577,6 +669,8 @@ async def chat_interact(
             profile_service=profile_service,
             memory_service=memory_service,
             trace_service=trace_service,
+            focus_service=focus_service,
+            whisperer_agent=whisperer_agent,
             langfuse_trace_id=langfuse_trace_id
         )
 
@@ -590,7 +684,8 @@ async def chat_interact(
                 "latency": steps_latency,
                 "total_latency_ms": total_latency,
                 "prompt_preview": final_system_prompt,
-                "token_usage": token_usage
+                "token_usage": token_usage,
+                "whisper_consumed": whisper_suggestion # Debug info
             }
         }
         

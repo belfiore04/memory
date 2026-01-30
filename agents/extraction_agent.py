@@ -69,7 +69,17 @@ EXTRACTION_SPECIALIST_PROMPT = """
       *   示例：用户说「最近在找工作」→ content:「用户最近在找工作」                                                                       
       *   示例：用户说「我跟男朋友分手了」→ content:「用户最近与男朋友分手」                                                               
       *   **不属于近期关注的**：「我昨天吃了火锅」（无触动性）、「我去年去过日本」（无时效性）                                             
-      *   **CRITICAL: `content` 必须使用第三人称描述**  
+      *   **CRITICAL: `content` 必须使用第三人称描述**
+      *   **日期推断**：如果用户提到了明确时间（如「下周考试」「2月3号面试」），请推断出具体日期填入 `expected_date`（格式 YYYY-MM-DD）
+      *   如果无法推断具体日期（如「最近在健身」），`expected_date` 留空
+      *   **时间转写**：如果用户使用相对时间表达（如「后天」「下周」「这周五」），                                            
+        在 `content` 中必须转写为绝对日期。                                                                                 
+        - 用户说「我后天要考四级」（当前日期 2026-01-29）                                                                   
+        → content:「用户 2026-01-31 有四级考试」                                                                          
+        - 用户说「下周三要面试」（当前日期 2026-01-29）                                                                     
+        → content:「用户 2026-02-05 有面试」                                                                              
+        - `expected_date` 字段也填写同样的日期
+      *   **仅从用户消息提取**：近期关注只能从用户说的话中提取，不能从角色的回复中提取。角色提及用户的近期关注只是在引用已知信息，不构成新的近期关注。
 
 4.  **隐含表达的识别（重要）：**
     *   如果用户通过反问、设问、假设等方式表达偏好/事实，也需要提取
@@ -121,7 +131,8 @@ EXTRACTION_SPECIALIST_PROMPT = """
   "recent_focus": [                                                                                                                      
       {                                                                                                                                    
         "content": "字符串 (近期关注事项的描述)",                                                                                          
-        "evidence": "字符串 (原文依据的引用)"                                                                                              
+        "evidence": "字符串 (原文依据的引用)",
+        "expected_date": "字符串 (YYYY-MM-DD 格式的预期日期，可选，无法推断则留空)"                                                                                              
       }                                                                                                                                    
   ]
 }
@@ -135,6 +146,7 @@ EXTRACTION_SPECIALIST_PROMPT = """
 </output_format>
 
 <input_data>
+当前日期: {current_date}
 {{对话内容}}
 </input_data>
 """
@@ -183,8 +195,14 @@ class ExtractionAgent:
             input_content = f"【用户】: {query}"
             
         try:
+            # 格式化 Prompt (注入当前日期)
+            from datetime import datetime
+            today_str = datetime.now().strftime("%Y-%m-%d %A") # e.g. 2026-01-29 Thursday
+            
+            prompt = EXTRACTION_SPECIALIST_PROMPT.replace("{current_date}", today_str)
+
             messages = [
-                {"role": "system", "content": EXTRACTION_SPECIALIST_PROMPT},
+                {"role": "system", "content": prompt},
                 {"role": "user", "content": input_content}
             ]
             

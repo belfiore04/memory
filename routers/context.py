@@ -80,5 +80,19 @@ async def clear_context(user_id: str, current_user: dict = Depends(get_current_u
         service.clear_context(user_id)
         return {"status": "success", "message": f"Context cleared for user {user_id}"}
     except Exception as e:
-        logger.error(f"上下文清空失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{user_id}/summary", response_model=dict)
+async def clear_summary_only(user_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["id"] != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden: You can only access your own data")
+    """
+    仅清空指定用户的摘要，保留最近对话历史
+    """
+    try:
+        service = get_context_service()
+        service.clear_summary(user_id)
+        return {"status": "success", "message": f"Context summary cleared for user {user_id}"}
+    except Exception as e:
+        logger.error(f"上下文摘要清空失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,7 +1,11 @@
+# [FIX] 防止 localhost 请求走系统代理 (解决 Langfuse feedback 推送失败)
+# 必须在任何网络库导入之前设置
+import os
+os.environ.setdefault('NO_PROXY', 'localhost,127.0.0.1,::1')
+
 import openai
 from langfuse.openai import OpenAI as LangfuseOpenAI
 from langfuse.openai import AsyncOpenAI as LangfuseAsyncOpenAI
-import os
 import logging
 from dotenv import load_dotenv
 
@@ -181,6 +185,7 @@ graphiti_client.OpenAIGenericClient._generate_response = patched_generate_respon
 from fastapi import FastAPI
 from routers import memory, context, profile, chat, auth
 from routers import psychology
+from routers import focus
 
 # 配置日志
 logging.basicConfig(
@@ -217,6 +222,7 @@ app.include_router(profile.router)
 app.include_router(chat.router)
 app.include_router(psychology.router)
 app.include_router(auth.router)
+app.include_router(focus.router)
 
 @app.get("/health")
 async def health_check():
