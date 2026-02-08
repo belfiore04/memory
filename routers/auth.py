@@ -60,9 +60,53 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # 检查用户状态
+    if not user.get("is_active", 1):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is banned",
+        )
+    
     access_token = auth_service.create_access_token(data={"sub": user["id"]})
     return {"access_token": access_token, "token_type": "bearer", "user_id": user["id"]}
 
 @router.get("/me")
 async def read_users_me(current_user: dict = Depends(get_current_user)):
-    return {"id": current_user["id"], "username": current_user["username"]}
+    return {
+        "id": current_user["id"], 
+        "username": current_user["username"],
+        "role": current_user.get("role", "user"),
+        "is_active": current_user.get("is_active", 1),
+        "ai_name": current_user.get("ai_name"),
+        "persona": current_user.get("persona")
+    }
+
+class AISettings(BaseModel):
+    ai_name: Optional[str] = None
+    persona: Optional[str] = None
+
+@router.get("/persona")
+async def get_persona(current_user: dict = Depends(get_current_user)):
+    """获取用户 AI 设定 (Persona)"""
+    return {
+        "ai_name": current_user.get("ai_name"),
+        "persona": current_user.get("persona")
+    }
+
+@router.put("/persona")
+async def update_persona(settings: AISettings, current_user: dict = Depends(get_current_user)):
+    """更新用户 AI 设定 (Persona)"""
+    success = auth_service.update_user_settings(current_user["id"], settings.ai_name, settings.persona)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update settings")
+    return {"message": "Persona updated successfully"}
+
+async def get_current_admin(current_user: dict = Depends(get_current_user)):
+    """依赖注入：验证当前用户是否为管理员"""
+    role = current_user.get("role", "user")
+    if role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user

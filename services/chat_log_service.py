@@ -26,6 +26,8 @@ class ChatLogService:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            
+            # 创建基础表
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS chat_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +37,19 @@ class ChatLogService:
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # 检查并添加 character_name 列
+            cursor.execute("PRAGMA table_info(chat_logs)")
+            columns = [info[1] for info in cursor.fetchall()]
+            
+            if "character_name" not in columns:
+                cursor.execute("ALTER TABLE chat_logs ADD COLUMN character_name TEXT")
+                logger.info("[ChatLog] Added column: character_name")
+                
+            if "character_persona" not in columns:
+                cursor.execute("ALTER TABLE chat_logs ADD COLUMN character_persona TEXT")
+                logger.info("[ChatLog] Added column: character_persona")
+
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_user_date 
                 ON chat_logs(user_id, created_at)
@@ -45,7 +60,7 @@ class ChatLogService:
             logger.error(f"[ChatLog] 初始化 DB 失败: {str(e)}")
             raise
     
-    def log_message(self, user_id: str, role: str, content: str, created_at: str = None):
+    def log_message(self, user_id: str, role: str, content: str, created_at: str = None, character_name: str = None, character_persona: str = None):
         """
         记录单条消息
         
@@ -54,30 +69,31 @@ class ChatLogService:
             role: 消息角色 (user/assistant)
             content: 消息内容
             created_at: 可选，指定创建时间 (格式: YYYY-MM-DD HH:MM:SS)，用于调试模拟
+            character_name: 当时生效的 AI 名字
+            character_persona: 当时生效的人设
         """
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            if created_at:
-                # 使用指定时间（调试模式）
-                cursor.execute(
-                    "INSERT INTO chat_logs (user_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-                    (user_id, role, content, created_at)
-                )
-            else:
-                # 使用当前时间（正常模式）
-                cursor.execute(
-                    "INSERT INTO chat_logs (user_id, role, content) VALUES (?, ?, ?)",
-                    (user_id, role, content)
-                )
+            # [FIX] 如果未指定时间，使用本地时间而非 UTC (DB DEFAULT)
+            if not created_at:
+                created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            cursor.execute(
+                """
+                INSERT INTO chat_logs (user_id, role, content, created_at, character_name, character_persona) 
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, role, content, created_at, character_name, character_persona)
+            )
             
             conn.commit()
             conn.close()
         except Exception as e:
             logger.error(f"[ChatLog] 记录消息失败: {str(e)}")
     
-    def log_messages(self, user_id: str, messages: List[Dict[str, str]], virtual_date: str = None):
+    def log_messages(self, user_id: str, messages: List[Dict[str, str]], virtual_date: str = None, character_name: str = None, character_persona: str = None):
         """
         批量记录消息
         
@@ -85,6 +101,8 @@ class ChatLogService:
             user_id: 用户ID
             messages: 消息列表
             virtual_date: 可选，虚拟日期 (格式: YYYY-MM-DD)，用于调试模拟
+            character_name: AI 名字
+            character_persona: AI 人设
         """
         created_at = None
         if virtual_date:
@@ -92,7 +110,7 @@ class ChatLogService:
             created_at = f"{virtual_date} 12:00:00"
         
         for msg in messages:
-            self.log_message(user_id, msg["role"], msg["content"], created_at)
+            self.log_message(user_id, msg["role"], msg["content"], created_at, character_name, character_persona)
 
     def get_daily_logs(self, user_id: str, target_date: date) -> List[Dict]:
         """获取指定日期的聊天记录"""
@@ -106,7 +124,7 @@ class ChatLogService:
             
             cursor.execute(
                 """
-                SELECT role, content, created_at 
+                SELECT role, content, created_at, character_name, character_persona 
                 FROM chat_logs 
                 WHERE user_id = ? AND created_at BETWEEN ? AND ?
                 ORDER BY created_at ASC
@@ -117,7 +135,13 @@ class ChatLogService:
             conn.close()
             
             return [
-                {"role": r[0], "content": r[1], "created_at": r[2]} 
+                {
+                    "role": r[0], 
+                    "content": r[1], 
+                    "created_at": r[2],
+                    "character_name": r[3],
+                    "character_persona": r[4]
+                } 
                 for r in rows
             ]
         except Exception as e:
@@ -153,7 +177,7 @@ class ChatLogService:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            query = "SELECT id, role, content, created_at FROM chat_logs WHERE user_id = ?"
+            query = "SELECT id, role, content, created_at, character_name, character_persona FROM chat_logs WHERE user_id = ?"
             params = [user_id]
             
             if before_id:
@@ -167,15 +191,14 @@ class ChatLogService:
             rows = cursor.fetchall()
             conn.close()
             
-            # 结果需要反转为时间正序 (旧 -> 新) 方便前端展示
-            # 但这里返回降序数据，前端收到后再 reverse 或者 prepend 也可以
-            # 为了接口一致性，这里保持 DB 查出来的顺序 (降序: 最新 -> 最旧)
             return [
                 {
                     "id": r[0],
                     "role": r[1],
                     "content": r[2],
-                    "created_at": r[3]
+                    "created_at": r[3],
+                    "character_name": r[4],
+                    "character_persona": r[5]
                 }
                 for r in rows
             ]
@@ -183,16 +206,71 @@ class ChatLogService:
             logger.error(f"[ChatLog] 获取历史失败: {str(e)}")
             return []
             
-    def clear_history(self, user_id: str) -> bool:
-        """清空用户的聊天历史"""
+    def get_stats(self) -> Dict[str, int]:
+        """获取系统统计信息"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM chat_logs WHERE user_id = ?", (user_id,))
-            conn.commit()
+            
+            # 1. 今日日期字符串 (本地)
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            
+            # 2. 今日活跃用户数 (发送过消息的去重用户)
+            cursor.execute(
+                "SELECT COUNT(DISTINCT user_id) FROM chat_logs WHERE created_at LIKE ?",
+                (f"{today_str}%",)
+            )
+            today_active_users = cursor.fetchone()[0] or 0
+            
+            # 3. 今日用户聊天轮数 (role='user' 的消息总数)
+            cursor.execute(
+                "SELECT COUNT(*) FROM chat_logs WHERE role = 'user' AND created_at LIKE ?",
+                (f"{today_str}%",)
+            )
+            today_chat_rounds = cursor.fetchone()[0] or 0
+            
             conn.close()
-            logger.info(f"[ChatLog] 已清空用户 {user_id} 的历史记录")
-            return True
+
+            return {
+                "today_active_users": today_active_users,
+                "today_chat_rounds": today_chat_rounds
+            }
         except Exception as e:
-            logger.error(f"[ChatLog] 清空历史失败: {str(e)}")
-            return False
+            logger.error(f"[ChatLog] 获取统计失败: {str(e)}")
+            return {
+                "today_active_users": 0,
+                "today_chat_rounds": 0
+            }
+
+    def get_stats_since(self, since_at: str) -> Dict[str, int]:
+        """获取指定时间之后的统计信息"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # 1. 活跃用户数 (DISTINCT user_id)
+            cursor.execute(
+                "SELECT COUNT(DISTINCT user_id) FROM chat_logs WHERE created_at >= ?",
+                (since_at,)
+            )
+            active_users = cursor.fetchone()[0] or 0
+            
+            # 2. 用户聊天轮数 (role='user' 的消息总数)
+            cursor.execute(
+                "SELECT COUNT(*) FROM chat_logs WHERE role = 'user' AND created_at >= ?",
+                (since_at,)
+            )
+            chat_rounds = cursor.fetchone()[0] or 0
+            
+            conn.close()
+            
+            return {
+                "active_users": active_users,
+                "chat_rounds": chat_rounds
+            }
+        except Exception as e:
+            logger.error(f"[ChatLog] 获取时段统计信息失败: {str(e)}")
+            return {
+                "active_users": 0,
+                "chat_rounds": 0
+            }

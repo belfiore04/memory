@@ -38,7 +38,7 @@ class ContextService:
         self.llm_model = os.getenv("SPEED_MODEL", "qwen-flash")
         
         # 配置
-        self.max_history_rounds = 5  # 触发概括的对话轮数阈值（1轮 = user + assistant 各1条消息）
+        self.max_history_rounds = 50  # 触发概括的对话轮数阈值（1轮 = user + assistant 各1条消息）
         self.session_timeout_hours = 3  # 会话超时时间（小时），超过后自动清空摘要
         
     def _init_db(self):

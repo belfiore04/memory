@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Admin Dashboard</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-color: #1f2937;
+            --border-color: #e5e7eb;
+            --danger-color: #ef4444;
+            --success-color: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .stat-item h3 {
+            margin: 0 0 8px 0;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .stat-item div {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            font-weight: 600;
+            color: #6b7280;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge-admin {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-user {
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+
+        .badge-active {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-banned {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .chat-msg {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .chat-meta {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+
+        /* Login Form */
+        #login-view {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.875rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Login View -->
+    <div id="login-view" class="card">
+        <h2 style="margin-top:0">管理员登录</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="username" required>
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="password" required>
+            </div>
+            <button type="submit" class="btn" style="width:100%">登录</button>
+        </form>
+    </div>
+
+    <!-- Dashboard View -->
+    <div id="dashboard-view" class="container hidden">
+        <header>
+            <h1>Memory Admin</h1>
+            <div>
+                <button class="btn" style="background-color:#4b5563; margin-right:10px" onclick="openSettings()">AI
+                    设定</button>
+                <button class="btn btn-danger" onclick="logout()">退出登录</button>
+            </div>
+        </header>
+
+        <!-- Time Filter -->
+        <div class="card" style="display: flex; align-items: center; gap: 10px; padding: 12px 20px;">
+            <label style="font-weight: 500; font-size: 0.875rem;">统计时间范围:</label>
+            <select id="time-filter" style="padding: 6px; border-radius: 4px; border: 1px solid var(--border-color)"
+                onchange="onTimeFilterChange()">
+                <option value="1h">最近 1 小时</option>
+                <option value="24h">最近 24 小时</option>
+                <option value="7d">最近 7 天</option>
+                <option value="custom">自定义时间...</option>
+            </select>
+            <input type="datetime-local" id="custom-time" class="hidden"
+                style="padding: 5px; border: 1px solid var(--border-color); border-radius: 4px;">
+            <button class="btn" style="padding: 6px 12px; font-size: 0.8rem;" onclick="loadStats()">刷新</button>
+        </div>
+
+        <div class="card">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>总用户数</h3>
+                    <div id="stat-total-users">-</div>
+                </div>
+                <div class="stat-item">
+                    <h3>活跃/启用</h3>
+                    <div id="stat-active-users">-</div>
+                </div>
+                <div class="stat-item">
+                    <h3>今日活跃用户</h3>
+                    <div id="stat-today-active-users">-</div>
+                </div>
+                <div class="stat-item">
+                    <h3>今日对话轮数</h3>
+                    <div id="stat-today-chat-rounds">-</div>
+                </div>
+                <!-- Dynamic Stats -->
+                <div class="stat-item" style="border-left: 2px solid var(--primary-color); padding-left: 15px;">
+                    <h3>所选时段新增用户</h3>
+                    <div id="stat-since-new-users" style="color: var(--primary-color)">-</div>
+                </div>
+                <div class="stat-item">
+                    <h3>所选时段活跃用户</h3>
+                    <div id="stat-since-active-users" style="color: var(--primary-color)">-</div>
+                </div>
+                <div class="stat-item">
+                    <h3>所选时段对话轮数</h3>
+                    <div id="stat-since-chat-rounds" style="color: var(--primary-color)">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="user-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>ID</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="user-body">
+                    <!-- Users will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <strong id="modal-title">聊天记录</strong>
+                <button class="btn" style="background:none; color:#666; padding:0;" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body" id="chat-history-container">
+                <!-- Chat Logs -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px">
+            <div class="modal-header">
+                <strong>AI 角色设定</strong>
+                <button class="btn" style="background:none; color:#666; padding:0;" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form" onsubmit="saveSettings(event)">
+                    <div class="form-group">
+                        <label>AI 名字</label>
+                        <input type="text" id="ai-name" placeholder="例如：Jarvis">
+                    </div>
+                    <div class="form-group">
+                        <label>人设 (System Prompt)</label>
+                        <textarea id="ai-persona" rows="6"
+                            style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px"
+                            placeholder="你是一个毒舌但心地善良的管家..."></textarea>
+                    </div>
+                    <button type="submit" class="btn" style="width:100%">保存设定</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let CURRENT_TOKEN = localStorage.getItem('access_token');
+
+        // Init
+        if (CURRENT_TOKEN) {
+            showDashboard();
+        }
+
+        // Login
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+
+                if (!res.ok) throw new Error("登录失败");
+                const data = await res.json();
+
+                // Verify Admin Role
+                CURRENT_TOKEN = data.access_token;
+                const meRes = await fetch(`${API_BASE}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${CURRENT_TOKEN}` }
+                });
+                const me = await meRes.json();
+
+                if (me.role !== 'admin') {
+                    alert("权限不足：仅管理员可访问");
+                    return;
+                }
+
+                localStorage.setItem('access_token', CURRENT_TOKEN);
+                showDashboard();
+            } catch (err) {
+                alert(err.message);
+            }
+        });
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            location.reload();
+        }
+
+        function showDashboard() {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+
+            // Set default custom date to now if needed
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('custom-time').value = now.toISOString().slice(0, 16);
+
+            // Set default filter
+            document.getElementById('time-filter').value = '24h';
+
+            loadStats();
+            loadUsers();
+        }
+
+        async function fetchAuth(url, options = {}) {
+            const headers = options.headers || {};
+            headers['Authorization'] = `Bearer ${CURRENT_TOKEN}`;
+            const res = await fetch(url, { ...options, headers });
+            if (res.status === 401) logout();
+            return res;
+        }
+
+        function onTimeFilterChange() {
+            const val = document.getElementById('time-filter').value;
+            const customInput = document.getElementById('custom-time');
+            if (val === 'custom') {
+                customInput.classList.remove('hidden');
+            } else {
+                customInput.classList.add('hidden');
+                loadStats();
+            }
+        }
+
+        function getSinceDate() {
+            const val = document.getElementById('time-filter').value;
+            const now = new Date();
+
+            if (val === '1h') {
+                return new Date(now.getTime() - 60 * 60 * 1000);
+            } else if (val === '24h') {
+                return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            } else if (val === '7d') {
+                return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            } else if (val === 'custom') {
+                const customVal = document.getElementById('custom-time').value;
+                return customVal ? new Date(customVal) : null;
+            }
+            return null;
+        }
+
+        async function loadStats() {
+            let url = `${API_BASE}/admin/stats?t=${new Date().getTime()}`;
+
+            const sinceDate = getSinceDate();
+            if (sinceDate) {
+                // To ISO string without milliseconds
+                // Adjust for timezone offset to send correct local time if backend expects UTC or handle consistency
+                // Backend expects string format comparison against SQLite DATETIME (which is usually UTC or naive)
+                // Assuming backend stores naive local time or UTC.
+                // It's safer to use naive string matching if DB is simplistic.
+                // Let's send a standard format: YYYY-MM-DD HH:MM:SS
+
+                // Construct YYYY-MM-DD HH:MM:SS locally
+                const pad = (n) => n.toString().padStart(2, '0');
+                const sinceStr = `${sinceDate.getFullYear()}-${pad(sinceDate.getMonth() + 1)}-${pad(sinceDate.getDate())} ${pad(sinceDate.getHours())}:${pad(sinceDate.getMinutes())}:${pad(sinceDate.getSeconds())}`;
+
+                url += `&since=${encodeURIComponent(sinceStr)}`;
+            }
+
+            const res = await fetchAuth(url);
+            const data = await res.json();
+            console.log("Stats API Response:", data); // Debug log
+
+            document.getElementById('stat-total-users').textContent = data.total_users;
+            document.getElementById('stat-active-users').textContent = data.active_users;
+            document.getElementById('stat-today-active-users').textContent = data.today_active_users !== undefined ? data.today_active_users : '0';
+            document.getElementById('stat-today-chat-rounds').textContent = data.today_chat_rounds !== undefined ? data.today_chat_rounds : '0';
+
+            // New stats
+            document.getElementById('stat-since-new-users').textContent = data.since_new_users !== undefined ? data.since_new_users : '-';
+            document.getElementById('stat-since-active-users').textContent = data.since_active_users !== undefined ? data.since_active_users : '-';
+            document.getElementById('stat-since-chat-rounds').textContent = data.since_chat_rounds !== undefined ? data.since_chat_rounds : '-';
+
+        }
+
+        async function loadUsers() {
+            const res = await fetchAuth(`${API_BASE}/admin/users`);
+            const users = await res.json();
+            const tbody = document.querySelector('#user-table tbody');
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.username}</td>
+                    <td style="font-family:monospace">${u.id.substring(0, 8)}...</td>
+                    <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
+                    <td><span class="badge ${u.is_active ? 'badge-active' : 'badge-banned'}">${u.is_active ? '正常' : '封禁'}</span></td>
+                    <td>
+                        <button class="btn" style="padding:4px 8px; font-size:12px" onclick="viewHistory('${u.id}')">查记录</button>
+                        ${u.role !== 'admin' ? `
+                            <button class="btn" style="padding:4px 8px; font-size:12px; background:#4b5563" onclick="toggleRole('${u.id}', 'admin')">设为Admin</button>
+                        ` : ''}
+                        ${u.is_active ? `
+                            <button class="btn btn-danger" style="padding:4px 8px; font-size:12px" onclick="toggleStatus('${u.id}', false)">封禁</button>
+                        ` : `
+                            <button class="btn" style="padding:4px 8px; font-size:12px; background:#10b981" onclick="toggleStatus('${u.id}', true)">解封</button>
+                        `}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        let currentChatUserId = null;
+        let currentNextBeforeId = null;
+
+        async function viewHistory(userId) {
+            currentChatUserId = userId;
+            currentNextBeforeId = null; // Reset
+
+            // Show modal first with loader
+            document.getElementById('history-modal').classList.add('active');
+            const container = document.getElementById('chat-history-container');
+            container.innerHTML = '<div style="text-align:center; padding:20px; color:#666">加载中...</div>';
+
+            // Clean load
+            await loadMoreHistory(true);
+        }
+
+        async function loadMoreHistory(isInitial = false) {
+            if (!currentChatUserId) return;
+
+            const btn = document.getElementById('load-more-btn');
+            if (btn) btn.textContent = '加载中...';
+
+            let url = `${API_BASE}/admin/users/${currentChatUserId}/history?limit=20`;
+            if (currentNextBeforeId) {
+                url += `&before_id=${currentNextBeforeId}`;
+            }
+
+            try {
+                const res = await fetchAuth(url);
+                const data = await res.json();
+
+                const container = document.getElementById('chat-history-container');
+
+                // If initial load, clear container
+                if (isInitial) {
+                    container.innerHTML = '';
+                    // Create "Load More" button container at the bottom (since messages are desc, fetching older means appending to bottom)
+                    // Wait: API returns DESC (Latest -> Oldest).
+                    // So [msg_now, msg_yesterday, msg_last_week]
+                    // If we just dump them, top is latest.
+                    // If we load more (older), we should append them to the bottom.
+                    // So "Load More" button should be at the BOTTOM.
+
+                    if (data.history.length === 0) {
+                        container.innerHTML = '<div style="text-align:center; color:#999">暂无记录</div>';
+                        return;
+                    }
+                } else {
+                    // Remove old load more button if exists
+                    const oldBtn = document.getElementById('load-more-btn');
+                    if (oldBtn) oldBtn.remove();
+                }
+
+                // Render messages
+                // API returns: [Newer, Older, Oldest...]
+                data.history.forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'chat-msg';
+
+                    let characterInfo = '';
+                    if (msg.role === 'assistant' && msg.character_name) {
+                        characterInfo = ` <span style="background:#e0e7ff; color:#4338ca; padding:2px 6px; border-radius:4px; font-size:11px; margin-left:8px">角色: ${msg.character_name}</span>`;
+                        if (msg.character_persona) {
+                            const personaId = `persona-${msg.id}`;
+                            characterInfo += ` <a href="#" onclick="togglePersona(event, '${personaId}')" style="font-size:11px; margin-left:4px; color:var(--primary-color)">[查看人设]</a>`;
+                            characterInfo += `<div id="${personaId}" class="hidden" style="margin-top:8px; padding:10px; background:#f9fafb; border:1px dashed #d1d5db; border-radius:6px; font-size:12px; color:#4b5563; white-space:pre-wrap"><strong>当时人设快照:</strong><br>${msg.character_persona}</div>`;
+                        }
+                    }
+
+                    div.innerHTML = `
+                        <div class="chat-meta">[${msg.created_at}] ${msg.role}${characterInfo}</div>
+                        <div style="white-space:pre-wrap">${msg.content}</div>
+                    `;
+                    container.appendChild(div);
+                });
+
+                // Update cursor
+                currentNextBeforeId = data.next_before_id;
+
+                // If currently returned full limit, assume there might be more
+                if (data.history.length >= 20) {
+                    const loadMoreBtn = document.createElement('div');
+                    loadMoreBtn.id = 'load-more-btn';
+                    loadMoreBtn.style.textAlign = 'center';
+                    loadMoreBtn.style.padding = '10px';
+                    loadMoreBtn.innerHTML = `<button class="btn" style="background:#e5e7eb; color:#374151" onclick="loadMoreHistory()">加载更多历史</button>`;
+                    container.appendChild(loadMoreBtn);
+                }
+
+            } catch (e) {
+                alert("加载失败: " + e.message);
+            }
+        }
+
+        function togglePersona(e, id) {
+            e.preventDefault();
+            const el = document.getElementById(id);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                e.target.textContent = '[收起人设]';
+            } else {
+                el.classList.add('hidden');
+                e.target.textContent = '[查看人设]';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('history-modal').classList.remove('active');
+            document.getElementById('settings-modal').classList.remove('active');
+        }
+
+        async function openSettings() {
+            try {
+                const res = await fetchAuth(`${API_BASE}/auth/persona`);
+                const data = await res.json();
+
+                document.getElementById('ai-name').value = data.ai_name || '';
+                document.getElementById('ai-persona').value = data.persona || '';
+
+                document.getElementById('settings-modal').classList.add('active');
+            } catch (e) {
+                alert("获取设置失败: " + e.message);
+            }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            const aiName = document.getElementById('ai-name').value;
+            const persona = document.getElementById('ai-persona').value;
+
+            try {
+                const res = await fetchAuth(`${API_BASE}/auth/persona`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ai_name: aiName, persona: persona })
+                });
+
+                if (!res.ok) throw new Error("保存失败");
+
+                alert("设置已保存");
+                closeModal();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        async function toggleRole(userId, newRole) {
+            if (!confirm(`确定将用户设为 ${newRole} 吗？`)) return;
+            await fetchAuth(`${API_BASE}/admin/users/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: newRole })
+            });
+            loadUsers();
+        }
+
+        async function toggleStatus(userId, isActive) {
+            if (!confirm(`确定 ${isActive ? '解封' : '封禁'} 该用户吗？`)) return;
+            await fetchAuth(`${API_BASE}/admin/users/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_active: isActive })
+            });
+            loadUsers();
+            loadStats();
+        }
+    </script>
+</body>
+
+</html>

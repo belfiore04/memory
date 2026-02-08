@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 # 定义提取专家 Prompt
 EXTRACTION_SPECIALIST_PROMPT = """
 <role>
-你是一位**记忆提取专家 (Memory Extraction Specialist)**。你负责从角色扮演对话中提取**值得长期记忆的信息**。
-你需要分析**完整的对话**（包括用户说的和角色说的），提取其中重要的事实、事件和共同记忆。
+你是一位**记忆提取专家 (Memory Extraction Specialist)**。你负责从用户说的话中提取**值得长期记忆的信息**。
+你需要分析用户说的话，提取其中重要的事实、事件和共同记忆。
 你是一个高度分析性、精确且没有废话的 AI 智能体。你从不进行闲聊，只负责处理数据。
 </role>
 
@@ -47,19 +47,21 @@ EXTRACTION_SPECIALIST_PROMPT = """
     *   必须严格映射到 `<knowledge_base>` 中的 4 个槽位之一
     *   **CRITICAL: `value` 必须是用户实际表达的内容。**
 
-2.  **长期记忆 (`memory_items`)：** 用于提取**对话双方**产生的重要信息
-    *   **来自用户的信息**：用户提到的具体事实、事件
-    *   **来自角色的信息（重要！）**：角色创造的共同记忆、世界观设定、人物关系
-    *   type 可选值：
-        - `event`（事件）- 发生过的具体事情
-        - `fact`（事实）- 客观信息
-        - `preference`（偏好）- 喜好相关
-        - `shared_memory`（共同记忆）- 角色与用户的共同经历
-        - `world_setting`（世界设定）- 角色世界中的人物、地点、关系等设定
-    *   **CRITICAL: `content` 必须使用第三人称描述，严禁使用「我」**
-    *   示例（用户说的）：用户说「我上周面试挂了」→ content: 「用户上周面试失败」, type: `event`
-    *   示例（角色说的）：角色说「我们第一次遇见时那片会发光的水母群」→ content: 「用户和角色第一次相遇时，有一片会发光的水母群」, type: `shared_memory`
-    *   示例（角色说的）：角色提到「唐知理」→ content: 「唐知理是一个会催促保镖来看住角色的人物」, type: `world_setting`
+2.  **长期记忆 (`memory_items`)：** 用于提取**有长期价值**的重要信息
+    *   **什么值得记：**                                                                                                
+        - 用户的偏好/喜好（用户喜欢吃干锅包菜、用户喜欢打守望先锋）                                                     
+        - 用户的重要经历/事件（用户上周面试失败、用户和男朋友分手了）                                                   
+        - 用户的人际关系（用户有一个男性好朋友、用户和角色是兄弟关系）                                                  
+        - 用户的自我认知（用户渴望成为强壮的人、用户不再把自己视作小孩子）                                                                               
+                                                                                                                          
+    *   **什么不记：**                                                                                                                                                                 
+        - 单次的日常互动（今天一起吃饭、今天一起打游戏）                                                                
+        - 对话中的情绪表达
+
+    *   type 可选值：                                                                                                   
+        - `preference`（偏好）- 用户的喜好                                                                              
+        - `fact`（事实）- 用户的客观信息（职业、住址、人际关系等）                                                      
+        - `event`（重要事件）- 有转折意义的事件，不是日常琐事                                                                                                  
 
 3.  **近期关注 (`recent_focus`)：** 用于提取用户最近正在经历、即将发生的重要事项                                                         
       *   判定条件（两条同时满足）：                                                                                                       
@@ -86,9 +88,12 @@ EXTRACTION_SPECIALIST_PROMPT = """
     *   如果角色在回复中**确认或补充**了某个设定，也需要提取
 
 5.  **过滤原则（什么不存）：**
-    *   忽略纯粹的闲聊或低信息量内容（如：「哈哈哈」、「嗯嗯」、「你在干嘛」）
-    *   不要提取**过于琐碎**的细节（如角色说"我刚煮了奶茶"不需要记录，除非用户表示喜欢）
-    *   如果没有提取到任何有价值的信息，输出空数组
+    *   **闲聊废话**：「哈哈哈」、「嗯嗯」、「你在干嘛」                                                                             
+    *   **即时状态**：「用户刚到家」「用户今天去了某个地方」——过了就没意义的不记                                        
+    *   **通用知识**：塔罗牌含义、歌手信息、历史事件等公开信息——这不是用户的个人信息                                    
+    *   **模糊无指向的信息**：「用户和朋友去吃了东西」——太模糊，没有长期价值
+    
+    **核心判断：这条信息一周后还有意义吗？如果没有，不记。**  
 </rules>
 
 <instructions>
@@ -107,6 +112,7 @@ EXTRACTION_SPECIALIST_PROMPT = """
 1.  角色是否创造了任何**共同记忆或世界设定**？如果有，必须提取！
 2.  我提取的 `slot` 名称是否严格是那 4 个预定义词汇之一？
 3.  用户是否提到了正在进行或即将发生的事？如果有，是否同时满足时效性和触动性？
+4.  **长期价值检验**：对每条准备提取的 memory_item 问自己：「一周后这条信息还有意义吗？」如果答案是否，删掉。 
 </instructions>
 
 <output_format>
@@ -188,11 +194,11 @@ class ExtractionAgent:
         """
         logger.info(f"[Analysis] 开始分析 user_id={user_id}, query={query[:50]}..., has_reply={bool(assistant_reply)}")
 
-        # 构建完整输入（包含用户和角色的对话）
-        if assistant_reply:
-            input_content = f"【用户】: {query}\n\n【角色】: {assistant_reply}"
-        else:
-            input_content = f"【用户】: {query}"
+        # 构建完整输入（只包含用户说的话）
+        # if assistant_reply:
+        #     input_content = f"【用户】: {query}\n\n【角色】: {assistant_reply}"
+        # else:
+        input_content = f"【用户】: {query}"
             
         try:
             # 格式化 Prompt (注入当前日期)
@@ -255,6 +261,12 @@ class ExtractionAgent:
             if "memory_items" not in result:
                 result["memory_items"] = []
             if "recent_focus" not in result:
+                result["recent_focus"] = []
+
+            # [FIX] 如果耳语者功能关闭，则强制清空 recent_focus 输出
+            enable_whisperer = os.getenv("ENABLE_WHISPERER", "true").lower() == "true"
+            if not enable_whisperer and result["recent_focus"]:
+                logger.info(f"[Analysis] 检测到 ENABLE_WHISPERER=false，过滤掉 {len(result['recent_focus'])} 条近期关注")
                 result["recent_focus"] = []
                 
             logger.info(f"[Analysis] 分析完成: Slots={len(result['slot_updates'])}, Memories={len(result['memory_items'])}, Focus={len(result['recent_focus'])}")

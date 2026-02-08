@@ -10,3 +10,4 @@ logs/
 .idea/
 *.pyc
 .DS_Store
+exported_memories_*.json

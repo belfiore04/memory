@@ -14,6 +14,7 @@ from services.feedback_service import FeedbackService
 from services.trace_service import TraceService
 from services.feedback_service import FeedbackService
 from services.focus_service import FocusService
+from services.llm import get_message_builder, get_chat_llm_client, get_chat_model_name, ChatContext
 from agents.extraction_agent import ExtractionAgent
 from agents.whisperer_agent import WhispererAgent
 from schemas.common import MessageItem
@@ -26,16 +27,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# 独立的 AsyncOpenAI 客户端，用于聊天生成（不经过 Graphiti 的 JSON-only monkey patch）
-_chat_llm_client: Optional[AsyncOpenAI] = None
-def get_chat_llm_client() -> AsyncOpenAI:
-    global _chat_llm_client
-    if _chat_llm_client is None:
-        _chat_llm_client = AsyncOpenAI(
-            api_key=os.getenv("MINIMAX_API_KEY"),
-            base_url="https://api.minimax.chat/v1",
-        )
-    return _chat_llm_client
+# get_chat_llm_client 已迁移到 services/llm/factory.py
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +109,41 @@ class ChatCompleteRequest(BaseModel):
     messages: List[MessageItem] = Field(..., description="当前轮对话 [user, assistant]")
     virtual_date: Optional[str] = Field(None, description="虚拟日期 (YYYY-MM-DD)，用于调试模拟")
 
+# ==================== 内存轮询缓存 (In-Memory Polling Cache) ====================
+_memory_polling_cache: Dict[str, Dict[str, Any]] = {}
+CACHE_TTL_SECONDS = 300  # 5分钟过期
+
+def _update_polling_cache(request_id: str, status: str, retrieved: bool = False, memories: list = None, episodes: list = None):
+    """更新轮询缓存"""
+    if not request_id:
+        return
+    
+    current_time = time.time()
+    _memory_polling_cache[request_id] = {
+        "status": status,
+        "retrieved": retrieved,
+        "memories": memories or [],
+        "episodes": episodes or [],
+        "timestamp": current_time
+    }
+    
+    # 简单的清理策略：每 10 次写入清理一次过期数据
+    if len(_memory_polling_cache) % 10 == 0:
+        _cleanup_polling_cache(current_time)
+
+def _cleanup_polling_cache(current_time: float):
+    """清理过期缓存"""
+    expired_keys = [k for k, v in _memory_polling_cache.items() if current_time - v["timestamp"] > CACHE_TTL_SECONDS]
+    for k in expired_keys:
+        del _memory_polling_cache[k]
+
+
 class ChatInteractRequest(BaseModel):
     """Chat 聚合交互请求 (替代 n8n)"""
     user_query: str = Field(..., description="用户输入")
     system_prompt: Optional[str] = Field(None, description="系统提示词模板 (可选)")
     virtual_date: Optional[str] = Field(None, description="虚拟日期 (YYYY-MM-DD)")
+    request_id: Optional[str] = Field(None, description="前端生成的请求ID，用于轮询记忆检索状态")
 
 class ChatInteractResponse(BaseModel):
     """Chat 聚合交互响应"""
@@ -133,10 +155,30 @@ class FeedbackRequest(BaseModel):
     trace_id: str = Field(..., description="SQLite trace_id")
     langfuse_trace_id: Optional[str] = Field(None, description="Langfuse trace_id（可选）")
     score: int = Field(..., ge=1, le=5, description="评分 1-5")
+    feedback_group: str = Field(..., description="反馈类型: chat/retrieval/extraction")
     categories: Optional[List[str]] = Field(None, description="问题分类列表")
     comment: Optional[str] = Field(None, description="可选备注")
 
 # ==================== Chat 聚合 API ====================
+
+@router.get("/polling/{request_id}/memory")
+async def get_memory_polling_status(request_id: str):
+    """轮询记忆检索状态"""
+    if request_id not in _memory_polling_cache:
+        # 如果缓存中没有，可能还没开始处理，或者已经过期，返回 processing 或 404
+        # 为了前端体验，这里返回 404 表示"无此任务"
+        raise HTTPException(status_code=404, detail="Request ID not found or expired")
+    
+    cache_data = _memory_polling_cache[request_id]
+    return {
+        "status": cache_data["status"],
+        "data": {
+            "retrieved": cache_data["retrieved"],
+            "memories": cache_data["memories"],
+            "episodes": cache_data["episodes"]
+        }
+    }
+
 
 @router.post("/{user_id}/prepare")
 async def chat_prepare(user_id: str, request: ChatPrepareRequest, current_user: dict = Depends(get_current_user)):
@@ -158,6 +200,11 @@ async def chat_prepare(user_id: str, request: ChatPrepareRequest, current_user: 
         profile_service = get_profile_service()
         profile_slots = profile_service.get_all_slots(user_id)
         
+        # 4. 获取即时画像（耳语者）
+        # [NEW] 使用 N+1 策略，读取上一轮异步生成的建议
+        focus_service = get_focus_service()
+        whisper_suggestion = focus_service.get_latest_whisper(user_id)
+        
         return {
             "context": {
                 "summary": context_result.get("summary", ""),
@@ -172,7 +219,8 @@ async def chat_prepare(user_id: str, request: ChatPrepareRequest, current_user: 
             },
             "profile": {
                 "slots": profile_slots
-            }
+            },
+            "whisper_suggestion": whisper_suggestion
         }
     except Exception as e:
         logger.error(f"Chat prepare 失败: {str(e)}")
@@ -272,7 +320,7 @@ async def _process_chat_background(
                     analysis_result = extraction_agent.analyze_query(
                         user_id,
                         user_query,
-                        assistant_reply=role_reply,  # 传入角色回复，用于提取角色创造的共同记忆
+                        # assistant_reply=role_reply,  # [已禁用] 只从用户Query提取，不看角色回复
                     )
 
                     # [NEW] 提取完成后立即同步到 Trace (供前端回显)
@@ -323,6 +371,12 @@ async def _process_chat_background(
                 recent_history = context_data.get("history", [])
 
                 # [NEW] 空载跳过逻辑：如果画像、焦点、历史均为空，则不激活耳语者
+                # 或者功能被禁用
+                enable_whisperer = os.getenv("ENABLE_WHISPERER", "true").lower() == "true"
+                if not enable_whisperer:
+                    logger.info(f"[Whisperer] 功能已禁用 (ENABLE_WHISPERER={enable_whisperer})")
+                    return
+
                 if not active_focus and not current_profile and len(recent_history) <= 2:
                     logger.info(f"[Whisperer] 跳过分析 user_id={user_id}: 画像、焦点及历史均为空")
                     return
@@ -376,7 +430,13 @@ async def chat_complete(user_id: str, request: ChatCompleteRequest, background_t
         
         # 1. 立即记录到 ChatLog (DB IO, fast)
         chat_log_service = get_chat_log_service()
-        chat_log_service.log_messages(user_id, messages, virtual_date=request.virtual_date)
+        chat_log_service.log_messages(
+            user_id, 
+            messages, 
+            virtual_date=request.virtual_date,
+            character_name=current_user.get("ai_name"),
+            character_persona=current_user.get("persona")
+        )
         
         # 2. 立即追加短期上下文 (SQLite IO, fast)
         context_service = get_context_service()
@@ -498,6 +558,10 @@ async def chat_interact(
     start_time = time.time()
     steps_latency = {}
     
+    # [Polling] 初始化轮询状态
+    if request.request_id:
+        _update_polling_cache(request.request_id, status="processing")
+    
     try:
         # [Trace Name Fix] 强制更新 Trace Name，防止被后台任务覆盖
         get_client().update_current_trace(name="聊天")
@@ -511,6 +575,16 @@ async def chat_interact(
         # (b) Memory
         memory_result = await memory_service.retrieve(user_id, request.user_query)
         
+        # [Polling] 如果提供了 request_id，这里查完记忆要马上更新缓存
+        if request.request_id:
+            _update_polling_cache(
+                request.request_id, 
+                status="done", 
+                retrieved=memory_result.get("should_retrieve", False),
+                memories=memory_result.get("memories", []),
+                episodes=memory_result.get("episodes", [])
+            )
+        
         # (c) Profile
         profile_slots = profile_service.get_all_slots(user_id)
         
@@ -519,34 +593,28 @@ async def chat_interact(
         
         steps_latency["preparation"] = int((time.time() - t0) * 1000)
         
-        # 2. Prompt Engineering (Strictly following n8n template)
+        # 2. Prompt Engineering (使用 Builder 模式)
         t0 = time.time()
-        
+
         # 默认 System Prompt
         default_system_prompt = """
 你是一个拥有长期记忆的 AI 伴侣。请根据提供的[过往记忆]、[用户资料]和[上下文]来回复用户。
 风格要求：亲切、自然、简洁。
 """
-        base_prompt = request.system_prompt if request.system_prompt else default_system_prompt
-        
-        # 拼装上下文块
-        memory_block = ""
-        if memory_result.get("memories"):
-            memory_block = "【过往记忆】\\n" + "\\n".join([f"- {m['content']}" for m in memory_result["memories"]]) + "\\n"
-            
-        profile_block = ""
-        if profile_slots:
-            profile_block = "【用户资料】\\n" + "\\n".join([f"- {k}: {v}" for k, v in profile_slots.items()]) + "\\n"
-            
-        context_summary = f"【长期聊史】{context_data.get('summary')}\\n" if context_data.get('summary') else ""
-        
-        recent_history = ""
-        if context_data.get("history"):
-            recent_history = "【近期对话】\\n" + "\\n".join([f"{h['role']}: {h['content']}" for h in context_data["history"]])
-            
+        # AI Character Settings
+        ai_name = current_user.get("ai_name")
+        persona = current_user.get("persona")
+
+        # 确定 base_prompt
+        if request.system_prompt:
+            base_prompt = request.system_prompt
+        elif persona:
+            base_prompt = persona
+        else:
+            base_prompt = default_system_prompt
+
+        # 计算当前时间（带时段）
         current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
-        # 添加时段描述
         hour = datetime.now().hour
         if 5 <= hour < 12:
             time_period = "上午"
@@ -559,52 +627,45 @@ async def chat_interact(
         else:
             time_period = "深夜"
         current_time_str = f"{current_time_str} ({time_period})"
-        
-        # 耳语注入 block (放在 task 之前，让模型更好注意)
-        whisper_block = ""
-        if whisper_suggestion:
-            whisper_block = f"\n<guidance>\n【耳语】{whisper_suggestion}\n</guidance>\n"
-        
-        # 最终 Prompt (基于 n8n XML 结构)
-        final_system_prompt = f"""<role>
-{base_prompt}
-在此角色设定基础上，你必须严格按照特定格式输出：只输出回复内容字符串。
-</role>
 
+        # 构建记忆块
+        memory_block = ""
+        if memory_result.get("memories"):
+            memory_block = "\n".join([f"- {m['content']}" for m in memory_result["memories"]])
 
-<context>
-{memory_block}{profile_block}{context_summary}{recent_history}
-</context>
+        # 构建 ChatContext
+        chat_context = ChatContext(
+            user_query=request.user_query,
+            base_prompt=base_prompt,
+            ai_name=ai_name,
+            memory_block=memory_block,
+            profile_slots=profile_slots or {},
+            context_summary=context_data.get("summary", ""),
+            recent_history=context_data.get("history", []),
+            whisper_suggestion=whisper_suggestion,
+            current_time_str=current_time_str,
+        )
 
-<output_format>
-严禁输出 Markdown 代码块标记（如 ```json），仅输出纯字符串。
-</output_format>
-{whisper_block}
+        # 使用 Builder 构建消息
+        builder = get_message_builder()
+        messages = builder.build_messages(chat_context)
+        model_params = builder.get_model_params()
 
-<environment>
-现在的时间是: {current_time_str}
-</environment>
+        # 保存 prompt 快照用于调试（取第一条 system 消息）
+        final_system_prompt = messages[0]["content"] if messages else ""
 
-<task>
-用户对你说：{request.user_query}
-请根据上述要求生成回复：
-</task>"""
         steps_latency["prompt_assembly"] = int((time.time() - t0) * 1000)
 
-        # 3. LLM Generation（使用独立客户端，不经过 Graphiti JSON patch）
+        # 3. LLM Generation（使用 factory 获取客户端）
         t0 = time.time()
-        messages = [
-            {"role": "system", "content": final_system_prompt},
-            {"role": "user", "content": request.user_query}
-        ]
 
         with get_client().start_as_current_span(name="生成回复") as span:
             chat_client = get_chat_llm_client()
-            chat_model = "M2-her"
+            chat_model = get_chat_model_name()
             llm_response = await chat_client.chat.completions.create(
                 model=chat_model,
                 messages=messages,
-                max_tokens=2048,
+                **model_params,
             )
 
             # 兼容 Langfuse AsyncOpenAI 包装器（返回 dict）和标准 OpenAI（返回 object）
@@ -638,7 +699,13 @@ async def chat_interact(
             {"role": "user", "content": request.user_query},
             {"role": "assistant", "content": ai_reply}
         ]
-        chat_log_service.log_messages(user_id, chat_msgs, virtual_date=request.virtual_date)
+        chat_log_service.log_messages(
+            user_id, 
+            chat_msgs, 
+            virtual_date=request.virtual_date,
+            character_name=current_user.get("ai_name"),
+            character_persona=current_user.get("persona")
+        )
         context_service.append_message(user_id, chat_msgs)
         
         steps_latency["post_processing"] = int((time.time() - t0) * 1000)
@@ -694,7 +761,20 @@ async def chat_interact(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/ping")
+async def ping():
+    return {"status": "pong", "version": "3.1.0-robust-feedback"}
+
+
 # ==================== 反馈评分 API ====================
+
+@router.get("/feedback/categories")
+async def get_feedback_metadata(
+    feedback_service: FeedbackService = Depends(get_feedback_service),
+):
+    """获取反馈分类元数据（包含分组、Key、Label）"""
+    return feedback_service.get_metadata()
+
 
 @router.get("/feedback/{feedback_id}")
 async def get_feedback(
@@ -724,7 +804,7 @@ async def submit_feedback(
     current_user: dict = Depends(get_current_user),
     feedback_service: FeedbackService = Depends(get_feedback_service),
 ):
-    """提交反馈评分"""
+    """提交用户反馈"""
     if current_user["id"] != user_id:
         raise HTTPException(status_code=403, detail="Forbidden: You can only access your own data")
     try:
@@ -732,12 +812,14 @@ async def submit_feedback(
             user_id=user_id,
             trace_id=request.trace_id,
             score=request.score,
+            feedback_group=request.feedback_group,
             categories=request.categories,
             comment=request.comment,
             langfuse_trace_id=request.langfuse_trace_id,
         )
         return {"feedback_id": feedback_id, "success": True}
     except ValueError as e:
+        logger.error(f"提交反馈参数错误: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"提交反馈失败: {str(e)}")

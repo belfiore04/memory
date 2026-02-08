@@ -215,6 +215,8 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有请求头
 )
 
+from fastapi.staticfiles import StaticFiles
+
 # 注册路由
 app.include_router(memory.router)
 app.include_router(context.router)
@@ -223,10 +225,16 @@ app.include_router(chat.router)
 app.include_router(psychology.router)
 app.include_router(auth.router)
 app.include_router(focus.router)
+# [New] Admin Router
+from routers import admin
+app.include_router(admin.router)
+
+# [New] Static Files (Admin Dashboard)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "memory-api", "version": "3.0.0"}
+    return {"status": "ok", "service": "memory-api", "version": "3.1.0"}
 
 if __name__ == "__main__":
     import uvicorn
