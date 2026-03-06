@@ -1,3 +1,4 @@
+import pytest
 
 import asyncio
 import uuid
@@ -7,6 +8,7 @@ import sys
 
 BASE_URL = "http://localhost:8000"
 
+@pytest.mark.asyncio
 async def test_polling(token: str):
     # 1. 准备 Request ID 和 查询
     request_id = str(uuid.uuid4())

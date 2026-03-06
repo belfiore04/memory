@@ -7,9 +7,9 @@ import json
 from datetime import date, timedelta
 from typing import List, Dict
 
-from services.chat_log_service import ChatLogService
-from services.daily_summary_service import DailySummaryService
-from services.profile_service import ProfileService
+from core_graph.services.chat_log_service import ChatLogService
+from core_graph.services.daily_summary_service import DailySummaryService
+from core_graph.services.profile_service import ProfileService
 from agents.summary_agent import SummaryAgent
 from agents.psychologist_agent import PsychologistAgent
 

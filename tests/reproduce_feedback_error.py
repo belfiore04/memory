@@ -11,7 +11,7 @@ def test_robust_feedback():
     user_id = "eee46254-78cd-46d6-9dbc-2470e47628e6"
     
     # 模拟从 Service 直接测试逻辑
-    from services.feedback_service import FeedbackService
+    from shared.utils.feedback_service import FeedbackService
     service = FeedbackService()
     
     print("--- 1. 测试元数据拉取 ---")

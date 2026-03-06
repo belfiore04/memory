@@ -4,8 +4,8 @@ import json
 import asyncio
 import logging
 from datetime import datetime
-from services.auth_service import AuthService
-from services.memory_service import MemoryService
+from shared.auth.auth_service import AuthService
+from core_graph.services.memory_service import MemoryService
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)

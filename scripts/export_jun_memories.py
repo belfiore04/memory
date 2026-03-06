@@ -6,7 +6,7 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.memory_service import MemoryService
+from core_graph.services.memory_service import MemoryService
 
 # Mock observe to avoid decorator errors if langfuse is not configured in this script context
 # strictly speaking imports in memory_service might already import langfuse, so we might need to handle environment.

@@ -1,3 +1,4 @@
+import pytest
 import httpx
 import asyncio
 import logging
@@ -7,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "http://localhost:8000"
 
+@pytest.mark.asyncio
 async def test_multi_user_isolation():
     async with httpx.AsyncClient(timeout=None) as client:
         # 1. 登录用户 A 和用户 B (假设已在之前的步骤中通过注册或迁移创建)

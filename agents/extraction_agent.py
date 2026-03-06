@@ -10,9 +10,10 @@ import json
 import logging
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
+from core_graph.services.profile_service import ProfileService
 from openai import OpenAI
 import time
-from services.llm_logger import log_llm_call
+from shared.llm.llm_logger import log_llm_call
 from langfuse import observe
 
 # 配置日志

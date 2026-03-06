@@ -1,3 +1,4 @@
+import pytest
 import sys
 import os
 import asyncio
@@ -7,17 +8,16 @@ from unittest.mock import MagicMock, patch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Mock dependencies to avoid actual service instantiation and side effects
-sys.modules['services.memory_service'] = MagicMock()
-sys.modules['services.context_service'] = MagicMock()
-sys.modules['services.profile_service'] = MagicMock()
-sys.modules['services.chat_log_service'] = MagicMock()
-sys.modules['services.trace_service'] = MagicMock()
-sys.modules['services.feedback_service'] = MagicMock()
-sys.modules['services.focus_service'] = MagicMock()
+sys.modules['core_graph.services.memory_service'] = MagicMock()
+sys.modules['core_graph.services.context_service'] = MagicMock()
+sys.modules['core_graph.services.profile_service'] = MagicMock()
+sys.modules['core_graph.services.chat_log_service'] = MagicMock()
+sys.modules['shared.utils.trace_service'] = MagicMock()
+sys.modules['shared.utils.feedback_service'] = MagicMock()
+sys.modules['core_graph.services.focus_service'] = MagicMock()
 sys.modules['agents.extraction_agent'] = MagicMock()
 sys.modules['agents.whisperer_agent'] = MagicMock()
-sys.modules['agents.whisperer_agent'] = MagicMock()
-sys.modules['routers.auth'] = MagicMock()
+sys.modules['shared.auth.auth'] = MagicMock()
 
 from pydantic import BaseModel
 class MessageItem(BaseModel):
@@ -47,11 +47,12 @@ mock_langfuse.observe = lambda name=None, **kwargs: lambda func: func # minimal 
 
 # Now import the target function
 try:
-    from routers.chat import _process_chat_background
+    from core_graph.routers.chat import _process_chat_background
 except ImportError as e:
     print(f"Import failed: {e}")
-    sys.exit(1)
+    raise e
 
+@pytest.mark.asyncio
 async def test_whisperer_switch():
     print("Testing Whisperer Switch...")
 

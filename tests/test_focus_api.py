@@ -2,14 +2,16 @@ import logging
 import json
 from fastapi.testclient import TestClient
 from main import app
-from routers.auth import get_current_user
-from services.focus_service import FocusService
+from shared.auth.auth import get_current_user
+from core_graph.routers.focus import router
+from shared.auth import auth
+from core_graph.services.focus_service import FocusService
 
-# 1. Mock Auth
+# Mock current user dependency
 def mock_get_current_user():
     return {"id": "test_user_api", "username": "tester"}
 
-app.dependency_overrides[get_current_user] = mock_get_current_user
+app.dependency_overrides[auth.get_current_user] = mock_get_current_user
 
 client = TestClient(app)
 USER_ID = "test_user_api"

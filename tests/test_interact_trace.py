@@ -1,3 +1,4 @@
+import pytest
 import httpx
 import asyncio
 import logging
@@ -8,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "http://localhost:8000"
 
+@pytest.mark.asyncio
 async def test_interact_and_trace():
     async with httpx.AsyncClient(timeout=60.0) as client:
         import uuid

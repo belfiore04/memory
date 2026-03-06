@@ -7,16 +7,17 @@ import os
 # Adjust path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from routers.chat import _process_chat_background
+from core_graph.routers.chat import _process_chat_background
+from core_graph.routers.chat import _process_chat_background
 
 class TestTraceContext(unittest.IsolatedAsyncioTestCase):
     
-    @patch("routers.chat.get_client")
-    @patch("routers.chat.get_context_service")
-    @patch("routers.chat.get_extraction_agent")
-    @patch("routers.chat.get_profile_service")
-    @patch("routers.chat.get_memory_service")
-    @patch("routers.chat.get_trace_service")
+    @patch("core_graph.routers.chat.get_client")
+    @patch("core_graph.routers.chat.get_context_service")
+    @patch("core_graph.routers.chat.get_extraction_agent")
+    @patch("core_graph.routers.chat.get_profile_service")
+    @patch("core_graph.routers.chat.get_memory_service")
+    @patch("core_graph.routers.chat.get_trace_service")
     async def test_trace_propagation(self, mock_trace, mock_mem, mock_prof, mock_ext, mock_ctx, mock_get_client):
         # Mock services
         mock_ctx.return_value = MagicMock()

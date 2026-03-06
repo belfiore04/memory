@@ -1,3 +1,4 @@
+import sqlite3
 import os
 import json
 import logging
@@ -8,8 +9,8 @@ from unittest.mock import MagicMock
 # 模拟环境
 os.environ["ABILITY_MODEL"] = "qwen-max"
 
-from services.focus_service import FocusService
-from services.profile_service import ProfileService
+from core_graph.services.focus_service import FocusService
+from core_graph.services.profile_service import ProfileService
 from agents.whisperer_agent import WhispererAgent
 
 # 配置日志
@@ -87,5 +88,5 @@ def test_focus_and_whisperer_flow():
         logger.error("FAIL: 建议未被消费")
 
 if __name__ == "__main__":
-    import sqlite3
+    
     test_focus_and_whisperer_flow()

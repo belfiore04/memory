@@ -1,3 +1,4 @@
+import pytest
 
 import asyncio
 import uuid
@@ -7,6 +8,7 @@ import sys
 
 BASE_URL = "http://localhost:8000"
 
+@pytest.mark.asyncio
 async def test_polling_e2e():
     print("=" * 60)
     print("🚀 Starting E2E Memory Polling Test")

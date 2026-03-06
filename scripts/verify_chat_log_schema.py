@@ -6,7 +6,7 @@ import sys
 # Ensure we can import from the project root
 sys.path.append(os.path.abspath("/Users/jinyijun/Documents/code/memory"))
 
-from services.chat_log_service import ChatLogService
+from core_graph.services.chat_log_service import ChatLogService
 from datetime import datetime
 
 def verify():

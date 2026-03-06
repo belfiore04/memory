@@ -1,13 +1,14 @@
+import sqlite3
 import os
 import sys
-import sqlite3
+
 
 # Ensure parent directory is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
 from main import app
-from services.auth_service import AuthService
+from shared.auth.auth_service import AuthService
 
 # 使用临时数据库测试
 TEST_DB = "./.mem0/test_auth.db"
@@ -16,18 +17,18 @@ def test_admin_flow():
     print("Starting Admin Flow Test...")
     
     # 1. Setup - Directly patch the instances used by Routers
-    import routers.auth
-    import routers.admin
+    import core_graph.routers.auth
+    import core_graph.routers.admin
     
     # 强制将 Router 里的 Service 实例指向测试 DB
     test_db_path = os.path.abspath(TEST_DB)
     
-    # Patch routers.auth.auth_service
-    routers.auth.auth_service.db_path = test_db_path
-    routers.auth.auth_service._init_db() # 重新初始化以确保表存在
+    # Patch core_graph.routers.auth.auth_service
+    core_graph.routers.auth.auth_service.db_path = test_db_path
+    core_graph.routers.auth.auth_service._init_db() # 重新初始化以确保表存在
     
-    # Patch routers.admin._auth_service
-    routers.admin._auth_service.db_path = test_db_path
+    # Patch core_graph.routers.admin._auth_service
+    core_graph.routers.admin._auth_service.db_path = test_db_path
     
     # 我们自己测试脚本里用的 helper service
     auth_service = AuthService(db_path=TEST_DB)

@@ -11,3 +11,4 @@ logs/
 *.pyc
 .DS_Store
 exported_memories_*.json
+roleplay_workspaces/

@@ -4,13 +4,13 @@ from typing import List, Optional
 from datetime import date, timedelta
 import logging
 
-from services.chat_log_service import ChatLogService
-from services.daily_summary_service import DailySummaryService
-from services.profile_service import ProfileService
+from core_graph.services.chat_log_service import ChatLogService
+from core_graph.services.daily_summary_service import DailySummaryService
+from core_graph.services.profile_service import ProfileService
 from agents.summary_agent import SummaryAgent
 from agents.psychologist_agent import PsychologistAgent
 from fastapi import Depends
-from routers.auth import get_current_user
+from shared.auth.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 

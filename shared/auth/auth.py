@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 from jose import JWTError, jwt
-from services.auth_service import AuthService, ALGORITHM, SECRET_KEY
+from shared.auth.auth_service import AuthService, ALGORITHM, SECRET_KEY
 import uuid
 
 router = APIRouter(prefix="/auth", tags=["Auth"])

@@ -1,16 +1,15 @@
-# [FIX] 防止 localhost 请求走系统代理 (解决 Langfuse feedback 推送失败)
-# 必须在任何网络库导入之前设置
 import os
+from dotenv import load_dotenv
+
+# 加载环境变量必须在所有第三方库尤其是 Langfuse 之前
+load_dotenv()
+
 os.environ.setdefault('NO_PROXY', 'localhost,127.0.0.1,::1')
 
 import openai
 from langfuse.openai import OpenAI as LangfuseOpenAI
 from langfuse.openai import AsyncOpenAI as LangfuseAsyncOpenAI
 import logging
-from dotenv import load_dotenv
-
-# 加载环境变量
-load_dotenv()
 
 # [Langfuse] 全局 Monkey Patch
 # 必须在导入任何使用 openai 的模块之前执行
@@ -180,12 +179,10 @@ async def patched_generate_response(
         raise
 
 # 应用补丁
-graphiti_client.OpenAIGenericClient._generate_response = patched_generate_response
-
 from fastapi import FastAPI
-from routers import memory, context, profile, chat, auth
-from routers import psychology
-from routers import focus
+from core_graph.routers import memory, context, profile, chat, admin, psychology, focus
+from shared.auth import auth
+from roleplay_pkg.routers import roleplay
 
 # 配置日志
 logging.basicConfig(
@@ -225,8 +222,10 @@ app.include_router(chat.router)
 app.include_router(psychology.router)
 app.include_router(auth.router)
 app.include_router(focus.router)
+# [New] Roleplay Router
+app.include_router(roleplay.router)
 # [New] Admin Router
-from routers import admin
+from core_graph.routers import admin
 app.include_router(admin.router)
 
 # [New] Static Files (Admin Dashboard)

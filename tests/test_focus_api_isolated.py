@@ -10,10 +10,10 @@ sys.modules["services.memory_service"].MemoryService = MagicMock()
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from routers.focus import router
-from routers.auth import get_current_user
+from core_graph.routers.focus import router
+from shared.auth import auth
 # 注意：FocusService 内部没有 import memory_service，应该安全
-from services.focus_service import FocusService
+from core_graph.services.focus_service import FocusService
 
 # 1. 创建最小化 App
 app = FastAPI()
@@ -23,7 +23,7 @@ app.include_router(router)
 def mock_get_current_user():
     return {"id": "test_user_iso", "username": "tester"}
 
-app.dependency_overrides[get_current_user] = mock_get_current_user
+app.dependency_overrides[auth.get_current_user] = mock_get_current_user
 
 client = TestClient(app)
 USER_ID = "test_user_iso"

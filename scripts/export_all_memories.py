@@ -6,8 +6,8 @@ import sys
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.memory_service import MemoryService
-from services.chat_log_service import ChatLogService
+from core_graph.services.memory_service import MemoryService
+from core_graph.services.chat_log_service import ChatLogService
 
 async def main():
     print(f"Starting memory export for ALL users...")

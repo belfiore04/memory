@@ -1,12 +1,17 @@
+from shared.auth import auth
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, AsyncMock, patch
 import json
 import logging
 import time
+import sys
+from unittest.mock import AsyncMock
+sys.modules['openai'] = AsyncMock()
+sys.modules['langfuse.openai'] = AsyncMock()
 
 # 导入 app 和依赖
 from main import app
-from routers.chat import (
+from core_graph.routers.chat import (
     get_memory_service, 
     get_trace_service, 
     get_extraction_agent,
@@ -46,22 +51,15 @@ app.dependency_overrides[get_memory_service] = lambda: mock_memory_service
 app.dependency_overrides[get_context_service] = lambda: mock_context_service
 app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
 app.dependency_overrides[get_chat_log_service] = lambda: mock_chat_log_service
+app.dependency_overrides[auth.get_current_user] = lambda: {"id": "mock_user", "username": "tester"}
 
 def test_memory_feedback_loop():
-    # 账号逻辑 (使用之前测试过的 jun 账号或重新注册)
-    username = f"feedback_test_{int(time.time())}"
-    client.post("/auth/register", json={"username": username, "password": "password"})
-    login_resp = client.post("/auth/login", data={"username": username, "password": "password"})
-    token = login_resp.json()["access_token"]
-    user_id = login_resp.json()["user_id"]
-    headers = {"Authorization": f"Bearer {token}"}
-
     # A. 调用 Interact
     print("Step A: Calling Interact...")
+    user_id = "mock_user"
     resp = client.post(
         f"/chat/{user_id}/interact",
-        json={"user_query": "我今天心情很好"},
-        headers=headers
+        json={"user_query": "我今天心情很好"}
     )
     if resp.status_code != 200:
         print(f"FAILED: {resp.status_code} - {resp.text}")
@@ -70,7 +68,7 @@ def test_memory_feedback_loop():
     print(f"Trace ID: {trace_id}")
     # B. 手动触发后台任务 (因为 TestClient 的 BackgroundTask 在 Mock 环境下有时难以跨线程轮询)
     print("Step B: Manually triggering background task as a unit test...")
-    from routers.chat import _process_chat_background
+    from core_graph.routers.chat import _process_chat_background
     import asyncio
     
     # 构造 chat_msgs
@@ -96,7 +94,7 @@ def test_memory_feedback_loop():
     # C. 轮询查询 Trace 结果
     print("Step C: Polling Trace...")
     for i in range(3):
-        trace_resp = client.get(f"/chat/trace/{trace_id}", headers=headers)
+        trace_resp = client.get(f"/chat/trace/{trace_id}")
         data = trace_resp.json()
         if data.get("new_memories"):
             print(f"Success! Found memories: {data['new_memories']}")

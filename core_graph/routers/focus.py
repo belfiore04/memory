@@ -7,8 +7,8 @@ import logging
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from services.focus_service import FocusService
-from routers.auth import get_current_user
+from core_graph.services.focus_service import FocusService
+from shared.auth.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 

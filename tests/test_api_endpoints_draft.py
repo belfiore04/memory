@@ -34,7 +34,7 @@ def test_focus_api():
     import sys
     import os
     sys.path.append(os.getcwd())
-    from services.focus_service import FocusService
+    from core_graph.services.focus_service import FocusService
     
     service = FocusService() # 指向本地 .mem0/focus.db
     service.add_focus(USER_ID, "测试关注点1: 找工作")

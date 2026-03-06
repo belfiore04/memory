@@ -1,7 +1,8 @@
+import sqlite3
 import sys
 import os
 import unittest
-import sqlite3
+
 import shutil
 from datetime import datetime, timedelta
 
@@ -15,8 +16,8 @@ sys.modules["graphiti_core.llm_client.config"] = MagicMock()
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from services.auth_service import AuthService
-from services.chat_log_service import ChatLogService
+from shared.auth.auth_service import AuthService
+from core_graph.services.chat_log_service import ChatLogService
 
 class TestAdminStats(unittest.TestCase):
     def setUp(self):
@@ -25,8 +26,21 @@ class TestAdminStats(unittest.TestCase):
         self.auth_db = os.path.join(self.test_dir, "auth.db")
         self.chat_db = os.path.join(self.test_dir, "chat_logs.db")
         
+        # 先初始化 Service，确保表已创建
         self.auth_service = AuthService(db_path=self.auth_db)
         self.chat_service = ChatLogService(db_path=self.chat_db)
+        
+        # Clean up existing data to prevent state bleed across test runs
+        conn_auth = sqlite3.connect(self.auth_db)
+        conn_auth.execute("DELETE FROM users")
+        conn_auth.commit()
+        conn_auth.close()
+        
+        conn_chat = sqlite3.connect(self.chat_db)
+        conn_chat.execute("DELETE FROM chat_logs")
+        conn_chat.execute("DELETE FROM feedbacks")
+        conn_chat.commit()
+        conn_chat.close()
         
     def tearDown(self):
         if os.path.exists(self.test_dir):

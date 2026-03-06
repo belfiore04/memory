@@ -11,7 +11,7 @@ import asyncio
 from typing import Optional, List, Dict, Literal, Any
 from datetime import datetime, timezone
 import time
-from services.llm_logger import log_llm_call, configure_graphiti_logging
+from shared.llm.llm_logger import log_llm_call, configure_graphiti_logging
 from langfuse import observe, get_client
 from dotenv import load_dotenv
 from openai import OpenAI

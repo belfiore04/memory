@@ -1,3 +1,4 @@
+import sqlite3
 import os
 import unittest
 import shutil
@@ -10,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 # 导入服务
 # 注意：这里假设运行目录是项目根目录，或者 PYTHONPATH 包含项目根目录
-from services.focus_service import FocusService
+from core_graph.services.focus_service import FocusService
 
 class TestFocusTime(unittest.TestCase):
     def setUp(self):
@@ -61,7 +62,7 @@ class TestFocusTime(unittest.TestCase):
         # Case 6: 模拟 TTL 过期 (手动修改 created_at)
         self.service.add_focus(user_id, "TTL过期事项")
         # 直接改库模拟 created_at 为 20 天前
-        import sqlite3
+        
         conn = sqlite3.connect(self.service.db_path)
         cursor = conn.cursor()
         old_date = datetime.now() - timedelta(days=20)
@@ -141,7 +142,7 @@ class TestFocusTime(unittest.TestCase):
         self.assertEqual(len(active_now), 0, "注入后应该进入冷却期不可见")
         
         # 4. 模拟过了 13 小时
-        import sqlite3
+        
         conn = sqlite3.connect(self.service.db_path)
         cursor = conn.cursor()
         old_time = datetime.now() - timedelta(hours=13)
@@ -155,5 +156,5 @@ class TestFocusTime(unittest.TestCase):
         self.assertEqual(active_later[0]["content"], "冷却测试事项")
 
 if __name__ == "__main__":
-    import sqlite3 
+     
     unittest.main()

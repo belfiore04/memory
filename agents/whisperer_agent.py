@@ -11,7 +11,7 @@ import json
 from typing import List, Dict, Optional, Any, Tuple
 from dotenv import load_dotenv
 from langfuse.openai import OpenAI as LangfuseOpenAI  # [NEW] 使用 Langfuse 封装的客户端
-from services.llm_logger import log_llm_call
+from shared.llm.llm_logger import log_llm_call
 
 logger = logging.getLogger(__name__)
 

@@ -5,20 +5,20 @@ import logging
 import json
 import re
 
-from services.memory_service import MemoryService
-from services.context_service import ContextService
-from services.profile_service import ProfileService
-from services.chat_log_service import ChatLogService
-from services.trace_service import TraceService
-from services.feedback_service import FeedbackService
-from services.trace_service import TraceService
-from services.feedback_service import FeedbackService
-from services.focus_service import FocusService
-from services.llm import get_message_builder, get_chat_llm_client, get_chat_model_name, ChatContext
+from core_graph.services.memory_service import MemoryService
+from core_graph.services.context_service import ContextService
+from core_graph.services.profile_service import ProfileService
+from core_graph.services.chat_log_service import ChatLogService
+from shared.utils.trace_service import TraceService
+from shared.utils.feedback_service import FeedbackService
+from shared.utils.trace_service import TraceService
+from shared.utils.feedback_service import FeedbackService
+from core_graph.services.focus_service import FocusService
+from shared.llm.llm import get_message_builder, get_chat_llm_client, get_chat_model_name, ChatContext
 from agents.extraction_agent import ExtractionAgent
 from agents.whisperer_agent import WhispererAgent
 from schemas.common import MessageItem
-from routers.auth import get_current_user
+from shared.auth.auth import get_current_user
 from datetime import datetime
 import time
 import os

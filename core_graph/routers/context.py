@@ -2,10 +2,10 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
-from services.context_service import ContextService
+from core_graph.services.context_service import ContextService
 from schemas.common import MessageItem
 from fastapi import Depends
-from routers.auth import get_current_user
+from shared.auth.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
