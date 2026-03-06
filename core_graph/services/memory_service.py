@@ -15,7 +15,7 @@ from shared.llm.llm_logger import log_llm_call, configure_graphiti_logging
 from langfuse import observe, get_client
 from dotenv import load_dotenv
 from openai import OpenAI
-from agents.memory_decision_agent import MemoryDecisionAgent
+from core_graph.agents.memory_decision_agent import MemoryDecisionAgent
 
 # Graphiti imports
 from graphiti_core import Graphiti

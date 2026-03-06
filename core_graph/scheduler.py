@@ -3,7 +3,7 @@
 独立于 HTTP 服务运行
 """
 from apscheduler.schedulers.blocking import BlockingScheduler
-from jobs.daily_summary_job import run_daily_analysis
+from core_graph.jobs.daily_summary_job import run_daily_analysis
 import logging
 import signal
 import sys

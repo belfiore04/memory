@@ -7,11 +7,11 @@ import json
 from datetime import date, timedelta
 from typing import List, Dict
 
-from core_graph.services.chat_log_service import ChatLogService
+from shared.services.chat_log_service import ChatLogService
 from core_graph.services.daily_summary_service import DailySummaryService
 from core_graph.services.profile_service import ProfileService
-from agents.summary_agent import SummaryAgent
-from agents.psychologist_agent import PsychologistAgent
+from core_graph.agents.summary_agent import SummaryAgent
+from core_graph.agents.psychologist_agent import PsychologistAgent
 
 logger = logging.getLogger(__name__)
 

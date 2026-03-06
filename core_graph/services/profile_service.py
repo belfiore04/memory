@@ -14,7 +14,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from schemas.profile_schema import (
+from core_graph.schemas.profile_schema import (
     SLOT_SCHEMA, 
     get_extraction_prompt, 
     get_merge_judgment_prompt,

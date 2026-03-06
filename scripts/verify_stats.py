@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.getcwd())
 
-from core_graph.services.chat_log_service import ChatLogService
+from shared.services.chat_log_service import ChatLogService
 from datetime import datetime
 
 def check_stats():

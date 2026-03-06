@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List, Dict, Any, Optional
 from shared.auth.auth_service import AuthService
-from core_graph.services.chat_log_service import ChatLogService
+from shared.services.chat_log_service import ChatLogService
 from shared.auth.auth import get_current_admin
 from pydantic import BaseModel
 

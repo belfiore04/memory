@@ -17,7 +17,7 @@ sys.modules["graphiti_core.llm_client.config"] = MagicMock()
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from shared.auth.auth_service import AuthService
-from core_graph.services.chat_log_service import ChatLogService
+from shared.services.chat_log_service import ChatLogService
 
 class TestAdminStats(unittest.TestCase):
     def setUp(self):
@@ -38,7 +38,6 @@ class TestAdminStats(unittest.TestCase):
         
         conn_chat = sqlite3.connect(self.chat_db)
         conn_chat.execute("DELETE FROM chat_logs")
-        conn_chat.execute("DELETE FROM feedbacks")
         conn_chat.commit()
         conn_chat.close()
         

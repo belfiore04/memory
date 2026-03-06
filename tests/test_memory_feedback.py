@@ -45,6 +45,16 @@ async def mock_generate_res(messages, response_format=None):
     return m
 mock_memory_service.llm_client.generate_response = mock_generate_res
 
+# Mock LLM Client (模拟 chat.completions.create 返回)
+mock_llm_client = MagicMock()
+mock_completion_response = MagicMock()
+mock_completion_response.choices = [MagicMock(message=MagicMock(content="很高兴听到你心情好！"))]
+mock_completion_response.usage = MagicMock(prompt_tokens=80, completion_tokens=30, total_tokens=110)
+
+async def mock_create(*args, **kwargs):
+    return mock_completion_response
+mock_llm_client.chat.completions.create = mock_create
+
 # Dependency Overrides
 app.dependency_overrides[get_extraction_agent] = lambda: mock_extraction_agent
 app.dependency_overrides[get_memory_service] = lambda: mock_memory_service
@@ -53,7 +63,9 @@ app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
 app.dependency_overrides[get_chat_log_service] = lambda: mock_chat_log_service
 app.dependency_overrides[auth.get_current_user] = lambda: {"id": "mock_user", "username": "tester"}
 
-def test_memory_feedback_loop():
+@patch("core_graph.routers.chat.get_chat_llm_client", return_value=mock_llm_client)
+@patch("core_graph.routers.chat.get_chat_model_name", return_value="mock-model")
+def test_memory_feedback_loop(mock_model, mock_client):
     # A. 调用 Interact
     print("Step A: Calling Interact...")
     user_id = "mock_user"

@@ -16,25 +16,27 @@ TEST_DB = "./.mem0/test_auth.db"
 def test_admin_flow():
     print("Starting Admin Flow Test...")
     
+    # 清空全局 dependency_overrides，防止之前测试的 mock 污染
+    saved_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.clear()
+    
     # 1. Setup - Directly patch the instances used by Routers
-    import core_graph.routers.auth
+    import shared.auth.auth
     import core_graph.routers.admin
     
     # 强制将 Router 里的 Service 实例指向测试 DB
     test_db_path = os.path.abspath(TEST_DB)
     
-    # Patch core_graph.routers.auth.auth_service
-    core_graph.routers.auth.auth_service.db_path = test_db_path
-    core_graph.routers.auth.auth_service._init_db() # 重新初始化以确保表存在
+    # Patch shared.auth.auth.auth_service (用于 login + get_current_user)
+    shared.auth.auth.auth_service.db_path = test_db_path
+    shared.auth.auth.auth_service._init_db()
     
-    # Patch core_graph.routers.admin._auth_service
+    # Patch core_graph.routers.admin._auth_service (用于 admin API)
     core_graph.routers.admin._auth_service.db_path = test_db_path
-    
-    # 我们自己测试脚本里用的 helper service
-    auth_service = AuthService(db_path=TEST_DB)
+    core_graph.routers.admin._auth_service._init_db()
     
     # 清理旧测试数据
-    conn = sqlite3.connect(TEST_DB)
+    conn = sqlite3.connect(test_db_path)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM users")
     conn.commit()
@@ -43,13 +45,17 @@ def test_admin_flow():
     try:
         client = TestClient(app)
         
-        # 2. Register Admin User
+        # 2. Register Admin User (使用 shared.auth.auth.auth_service 确保和 login 用的是同一个实例的 DB)
         print("Creating Admin user...")
-        auth_service.create_user("admin_id", "admin", "admin123", role="admin")
+        shared.auth.auth.auth_service.create_user("admin_id", "admin", "admin123", role="admin")
         
         # 3. Register Normal User
         print("Creating Normal user...")
-        auth_service.create_user("user_id", "user", "user123", role="user")
+        shared.auth.auth.auth_service.create_user("user_id", "user", "user123", role="user")
+        
+        # Debug: 验证用户确实被创建了
+        admin_user = shared.auth.auth.auth_service.get_user_by_id("admin_id")
+        print(f"DEBUG Admin user: role={admin_user.get('role')}, id={admin_user.get('id')}")
         
         # 4. Test Login as Admin
         print("Logging in as Admin...")
@@ -92,9 +98,11 @@ def test_admin_flow():
         
     finally:
         # 10. Cleanup
-        if os.path.exists(TEST_DB):
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(saved_overrides)
+        if os.path.exists(test_db_path):
             try:
-                os.remove(TEST_DB)
+                os.remove(test_db_path)
             except:
                 pass
 

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
 from core_graph.services.context_service import ContextService
-from schemas.common import MessageItem
+from core_graph.schemas.common import MessageItem
 from fastapi import Depends
 from shared.auth.auth import get_current_user
 

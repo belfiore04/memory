@@ -11,7 +11,7 @@ os.environ["ABILITY_MODEL"] = "qwen-max"
 
 from core_graph.services.focus_service import FocusService
 from core_graph.services.profile_service import ProfileService
-from agents.whisperer_agent import WhispererAgent
+from core_graph.agents.whisperer_agent import WhispererAgent
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)

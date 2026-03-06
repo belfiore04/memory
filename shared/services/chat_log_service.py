@@ -15,10 +15,10 @@ class ChatLogService:
     """聊天记录持久化服务"""
     
     def __init__(self, db_path: str = "./.mem0/chat_logs.db"):
-        self.mem0_path = os.path.abspath("./.mem0")
-        if not os.path.exists(self.mem0_path):
-            os.makedirs(self.mem0_path)
-        self.db_path = os.path.join(self.mem0_path, "chat_logs.db")
+        self.db_path = os.path.abspath(db_path)
+        db_dir = os.path.dirname(self.db_path)
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir)
         self._init_db()
     
     def _init_db(self):

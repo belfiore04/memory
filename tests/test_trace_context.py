@@ -8,7 +8,6 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core_graph.routers.chat import _process_chat_background
-from core_graph.routers.chat import _process_chat_background
 
 class TestTraceContext(unittest.IsolatedAsyncioTestCase):
     
@@ -52,8 +51,8 @@ class TestTraceContext(unittest.IsolatedAsyncioTestCase):
             langfuse_trace_id=trace_id
         )
         
-        # VERIFY: start_as_current_span called 3 times (对话记忆整理, 记忆提取, 分析对话内容)
-        self.assertEqual(mock_client.start_as_current_span.call_count, 3)
+        # VERIFY: start_as_current_span called 4 times (对话记忆整理, 记忆提取, 分析对话内容, 耳语者分析)
+        self.assertEqual(mock_client.start_as_current_span.call_count, 4)
 
         # First call should be 对话记忆整理 with trace_context
         first_call = mock_client.start_as_current_span.call_args_list[0]
@@ -74,6 +73,11 @@ class TestTraceContext(unittest.IsolatedAsyncioTestCase):
         # Verify analyze_query was NOT called with langfuse_trace_id kwarg
         analyze_call_kwargs = mock_ext.return_value.analyze_query.call_args
         self.assertNotIn("langfuse_trace_id", analyze_call_kwargs.kwargs)
+
+        # Fourth call should be 耳语者分析
+        fourth_call = mock_client.start_as_current_span.call_args_list[3]
+        _, fourth_kwargs = fourth_call
+        self.assertEqual(fourth_kwargs['name'], "耳语者分析")
 
         # Verify add_memory_item called
         mock_mem.return_value.add_memory_item.assert_called()

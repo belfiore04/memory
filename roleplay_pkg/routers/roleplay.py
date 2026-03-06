@@ -9,7 +9,7 @@ from langfuse import observe
 from pydantic import BaseModel, Field
 
 from shared.auth.auth import get_current_user
-from core_graph.services.chat_log_service import ChatLogService
+from shared.services.chat_log_service import ChatLogService
 from roleplay_pkg.services.roleplay_service import get_roleplay_service
 from shared.utils.trace_service import TraceService
 

@@ -9,7 +9,19 @@ import sys
 BASE_URL = "http://localhost:8000"
 
 @pytest.mark.asyncio
-async def test_polling(token: str):
+async def test_polling():
+    # 获取 token（先尝试登录，失败则使用 mock）
+    token = "mock_token"
+    try:
+        async with httpx.AsyncClient() as login_client:
+            login_resp = await login_client.post(
+                f"{BASE_URL}/auth/login",
+                data={"username": "test_user", "password": "password"}
+            )
+            if login_resp.status_code == 200:
+                token = login_resp.json()["access_token"]
+    except Exception:
+        pass
     # 1. 准备 Request ID 和 查询
     request_id = str(uuid.uuid4())
     user_query = "我是谁"  # 简单的查询，希望能触发记忆
@@ -71,27 +83,7 @@ async def test_polling(token: str):
     else:
         print(f"[Main] Chat Request Failed: {resp.status_code} {resp.text}")
 
-async def main():
-    # 简单登录获取 Token (如果有的话，或者如果你本地关闭了鉴权)
-    # 假设本地需要 Bearer Token，这里你需要填入一个有效的，或者先登录
-    # 为了简化，我们假设可以通过 login 获取，或者你可以手动填入
-    # 此处省略登录步骤，假设验证脚本在无鉴权或使用已知 Token 环境下运行
-    # 请手动替换下面的 Token 如果需要
-    token = "mock_token" 
-    
-    # 尝试登录获取 Token (复用之前的 login 逻辑)
-    async with httpx.AsyncClient() as client:
-        login_resp = await client.post(
-            f"{BASE_URL}/auth/login",
-            data={"username": "test_user", "password": "password"}
-        )
-        if login_resp.status_code == 200:
-            token = login_resp.json()["access_token"]
-            print(f"[Setup] Got token: {token[:10]}...")
-        else:
-            print("[Setup] Login failed, trying to create user or use mock token")
-    
-    await test_polling(token)
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    asyncio.run(test_polling())
+

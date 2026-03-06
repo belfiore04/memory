@@ -41,18 +41,25 @@ async def mock_generate_response(messages, response_format=None):
     return mock_resp
 mock_memory_service.llm_client.generate_response = mock_generate_response
 
+# Mock LLM Client (模拟 chat.completions.create 返回)
+mock_llm_client = MagicMock()
+mock_completion_response = MagicMock()
+mock_completion_response.choices = [MagicMock(message=MagicMock(content="量子纠缠可以比喻为两颗心灵感应的骰子。"))]
+mock_completion_response.usage = MagicMock(prompt_tokens=100, completion_tokens=50, total_tokens=150)
+
+async def mock_create(*args, **kwargs):
+    return mock_completion_response
+mock_llm_client.chat.completions.create = mock_create
+
 # Dependency Overrides
 app.dependency_overrides[get_memory_service] = lambda: mock_memory_service
 app.dependency_overrides[get_chat_log_service] = lambda: mock_chat_log_service
 app.dependency_overrides[get_context_service] = lambda: mock_context_service
 app.dependency_overrides[auth.get_current_user] = lambda: {"id": "mock_user", "username": "mock_user_001"}
 
-def test_interact_flow():
-    # 1. Mock Login (AuthService is real but uses SQLite which is file based, fine)
-    # We might need to mock AuthService if it fails too. 
-    # Actually, let's try to mock existing user data to skip login.
-    # Or just use the real login since we fixed passlib.
-    
+@patch("core_graph.routers.chat.get_chat_llm_client", return_value=mock_llm_client)
+@patch("core_graph.routers.chat.get_chat_model_name", return_value="mock-model")
+def test_interact_flow(mock_model, mock_client):
     # 注册用户 (跳过由于全局 DB 引起的实际请求，使用 mock user 测例)
     
     # 2. Interact
