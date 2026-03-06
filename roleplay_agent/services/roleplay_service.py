@@ -7,18 +7,17 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from roleplay_pkg.agents.roleplay.config import MAX_HISTORY_TURNS, ROLEPLAY_WORKSPACES_DIR
-from roleplay_pkg.agents.roleplay.workspace import (
+from roleplay_agent.agents.roleplay.config import MAX_HISTORY_TURNS, ROLEPLAY_WORKSPACES_DIR
+from roleplay_agent.agents.roleplay.workspace import (
     get_workspace_dir,
-    init_workspace,
-    list_characters,
+    init_workspace_with_content,
     list_workspace_files,
     read_workspace_file,
     reset_workspace,
     workspace_exists,
 )
-from roleplay_pkg.agents.roleplay.chat_agent import chat
-from roleplay_pkg.agents.roleplay.async_agent import run_async_agent
+from roleplay_agent.agents.roleplay.chat_agent import chat
+from roleplay_agent.agents.roleplay.async_agent import run_async_agent
 
 logger = logging.getLogger(__name__)
 
@@ -96,12 +95,10 @@ class RoleplayService:
         except Exception as e:
             logger.error(f"Async agent error: {e}")
 
-    def select_character(self, user_id: str, character_slug: str) -> Path:
-        """选择角色并初始化 workspace。"""
-        return init_workspace(user_id, character_slug)
+    def init_character(self, user_id: str, content: str) -> Path:
+        """初始化用户角色 workspace。"""
+        return init_workspace_with_content(user_id, content)
 
-    def get_characters(self) -> List[Dict]:
-        return list_characters()
 
     def get_workspace_files(self, user_id: str) -> List[Dict]:
         return list_workspace_files(user_id)

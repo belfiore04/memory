@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from shared.auth.auth import get_current_user
 from shared.services.chat_log_service import ChatLogService
-from roleplay_pkg.services.roleplay_service import get_roleplay_service
+from roleplay_agent.services.roleplay_service import get_roleplay_service
 from shared.utils.trace_service import TraceService
 
 logger = logging.getLogger(__name__)
@@ -40,14 +40,9 @@ def get_trace_service() -> TraceService:
 
 # ==================== 数据模型 ====================
 
-class CharacterItem(BaseModel):
-    slug: str
-    name: str
-    preview: str
+class SetCharacterRequest(BaseModel):
+    content: str = Field(..., description="角色设定 Markdown 内容", min_length=1)
 
-
-class SelectCharacterRequest(BaseModel):
-    character_slug: str = Field(..., description="角色 slug，如 'zhang_shan'")
 
 
 class InteractRequest(BaseModel):
@@ -68,34 +63,24 @@ class WorkspaceFileItem(BaseModel):
 
 # ==================== API 端点 ====================
 
-@router.get("/characters", response_model=List[CharacterItem])
-async def list_characters(
-    current_user: dict = Depends(get_current_user),
-):
-    """列出角色库中的所有可选角色。"""
-    service = get_roleplay_service()
-    return service.get_characters()
-
-
-@router.post("/{user_id}/select-character")
-async def select_character(
+@router.post("/{user_id}/character")
+async def set_character(
     user_id: str,
-    request: SelectCharacterRequest,
+    request: SetCharacterRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """选择角色并初始化 workspace。"""
+    """直接设置角色设定并初始化 workspace。"""
     if current_user.get("id") != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     service = get_roleplay_service()
     try:
-        workspace = service.select_character(user_id, request.character_slug)
+        workspace = service.init_character(user_id, request.content)
         return {"success": True, "workspace": str(workspace)}
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Error selecting character: {e}")
-        raise HTTPException(status_code=500, detail="角色选择失败")
+        logger.error(f"Error setting character: {e}")
+        raise HTTPException(status_code=500, detail="角色设定失败")
+
 
 
 @router.post("/{user_id}/interact", response_model=InteractResponse)

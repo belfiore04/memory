@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .config import CHARACTERS_DIR, ROLEPLAY_WORKSPACES_DIR
+from .config import ROLEPLAY_WORKSPACES_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -90,31 +90,17 @@ def get_workspace_dir(user_id: str) -> Path:
     return ROLEPLAY_WORKSPACES_DIR / user_id
 
 
-def init_workspace(user_id: str, character_slug: str) -> Path:
+def init_workspace_with_content(user_id: str, content: str) -> Path:
     """
-    初始化用户 workspace：从角色库复制 CHARACTER.md + 创建模板文件。
-
-    Args:
-        user_id: 用户 ID
-        character_slug: 角色文件名（不含 .md），如 "zhang_shan"
-
-    Returns:
-        workspace 路径
-
-    Raises:
-        FileNotFoundError: 角色不存在
+    通过用户提供的内容初始化 workspace。
     """
-    character_file = CHARACTERS_DIR / f"{character_slug}.md"
-    if not character_file.exists():
-        raise FileNotFoundError(f"角色不存在: {character_slug}")
-
     workspace = get_workspace_dir(user_id)
     workspace.mkdir(parents=True, exist_ok=True)
 
-    # 复制 CHARACTER.md
+    # 写入 CHARACTER.md
     char_dest = workspace / "CHARACTER.md"
-    shutil.copy2(character_file, char_dest)
-    logger.info(f"Copied CHARACTER.md for user {user_id} from {character_slug}")
+    char_dest.write_text(content, encoding="utf-8")
+    logger.info(f"Created CHARACTER.md for user {user_id} with custom content")
 
     # 创建模板文件（仅不存在时）
     for filename, template in TEMPLATES.items():
@@ -165,23 +151,6 @@ def list_workspace_files(user_id: str) -> List[Dict]:
         else:
             files.append({"filename": filename, "size": 0, "lines": 0, "exists": False})
     return files
-
-
-def list_characters() -> List[Dict]:
-    """列出角色库中的所有角色。"""
-    if not CHARACTERS_DIR.exists():
-        return []
-
-    characters = []
-    for f in sorted(CHARACTERS_DIR.glob("*.md")):
-        content = f.read_text(encoding="utf-8")
-        first_line = content.strip().splitlines()[0] if content.strip() else f.stem
-        characters.append({
-            "slug": f.stem,
-            "name": first_line,
-            "preview": content[:200],
-        })
-    return characters
 
 
 def workspace_exists(user_id: str) -> bool:

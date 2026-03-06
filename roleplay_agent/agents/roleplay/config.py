@@ -13,7 +13,7 @@ ROLEPLAY_ASYNC_BASE_URL = os.getenv("ROLEPLAY_ASYNC_BASE_URL", os.getenv("ASYNC_
 ROLEPLAY_ASYNC_MODEL = os.getenv("ROLEPLAY_ASYNC_MODEL", os.getenv("ASYNC_AGENT_MODEL", "MiniMax-M2.5"))
 ROLEPLAY_ASYNC_MAX_TOKENS = int(os.getenv("ROLEPLAY_ASYNC_MAX_TOKENS", "4096"))
 
-# roleplay_pkg 根目录
+# roleplay_agent 根目录
 _PKG_ROOT = Path(__file__).parent.parent.parent
 
 # Workspace 基础目录
@@ -21,9 +21,6 @@ ROLEPLAY_WORKSPACES_DIR = Path(os.getenv(
     "ROLEPLAY_WORKSPACES_DIR",
     str(_PKG_ROOT / "roleplay_workspaces")
 ))
-
-# 角色库目录
-CHARACTERS_DIR = _PKG_ROOT / "characters"
 
 # 主 Agent 注入的文件
 MAIN_INJECT_FILES = [

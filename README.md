@@ -13,7 +13,7 @@ memory/
 ├── core_graph/              # 🆕 旧版图谱记忆系统
 │   ├── routers/             # chat, memory, profile, context, focus, psychology, admin
 │   └── services/            # memory_service, profile_service, chat_log_service 等
-├── roleplay_pkg/            # 🆕 角色扮演系统
+├── roleplay_agent/          # 🆕 角色扮演系统
 │   ├── agents/roleplay/     # config, workspace, async_agent 等核心逻辑
 │   ├── routers/             # roleplay.py
 │   └── services/            # roleplay_service.py

@@ -182,7 +182,7 @@ async def patched_generate_response(
 from fastapi import FastAPI
 from core_graph.routers import memory, context, profile, chat, admin, psychology, focus
 from shared.auth import auth
-from roleplay_pkg.routers import roleplay
+from roleplay_agent.routers import roleplay
 
 # 配置日志
 logging.basicConfig(
