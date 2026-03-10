@@ -345,6 +345,22 @@
             </div>
         </div>
     </div>
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px">
+            <div class="modal-header">
+                <strong id="confirm-title">确认操作</strong>
+                <button class="btn" style="background:none; color:#666; padding:0;" onclick="resolveConfirm(false)">✕</button>
+            </div>
+            <div class="modal-body" id="confirm-message" style="padding: 24px; text-align: center; font-size: 1rem; color: var(--text-color);">
+                <!-- Message -->
+            </div>
+            <div style="padding: 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn" style="background-color: #f3f4f6; color: #374151" onclick="resolveConfirm(false)">取消</button>
+                <button class="btn" id="confirm-ok-btn" onclick="resolveConfirm(true)">确定</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const API_BASE = window.location.origin;
@@ -620,6 +636,31 @@
         function closeModal() {
             document.getElementById('history-modal').classList.remove('active');
             document.getElementById('settings-modal').classList.remove('active');
+            document.getElementById('confirm-modal').classList.remove('active');
+        }
+
+        let confirmResolve = null;
+        function showConfirm(message, title = "确认操作", isDanger = false) {
+            document.getElementById('confirm-message').textContent = message;
+            document.getElementById('confirm-title').textContent = title;
+            const okBtn = document.getElementById('confirm-ok-btn');
+            if (isDanger) {
+                okBtn.style.backgroundColor = 'var(--danger-color)';
+            } else {
+                okBtn.style.backgroundColor = 'var(--primary-color)';
+            }
+            document.getElementById('confirm-modal').classList.add('active');
+            return new Promise((resolve) => {
+                confirmResolve = resolve;
+            });
+        }
+
+        function resolveConfirm(value) {
+            document.getElementById('confirm-modal').classList.remove('active');
+            if (confirmResolve) {
+                confirmResolve(value);
+                confirmResolve = null;
+            }
         }
 
         async function openSettings() {
@@ -658,7 +699,8 @@
         }
 
         async function toggleRole(userId, newRole) {
-            if (!confirm(`确定将用户设为 ${newRole} 吗？`)) return;
+            const ok = await showConfirm(`确定将用户设为 ${newRole} 吗？`, "确认权限变更");
+            if (!ok) return;
             await fetchAuth(`${API_BASE}/admin/users/${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -668,7 +710,8 @@
         }
 
         async function toggleStatus(userId, isActive) {
-            if (!confirm(`确定 ${isActive ? '解封' : '封禁'} 该用户吗？`)) return;
+            const ok = await showConfirm(`确定 ${isActive ? '解封' : '封禁'} 该用户吗？`, "确认状态变更", !isActive);
+            if (!ok) return;
             await fetchAuth(`${API_BASE}/admin/users/${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },

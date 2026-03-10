@@ -498,9 +498,9 @@ async def clear_chat_history(user_id: str, current_user: dict = Depends(get_curr
         if success:
             return {"success": True, "message": f"用户 {user_id} 的历史记录已清空"}
         else:
-            raise HTTPException(status_code=500, detail="清空失败")
+            raise HTTPException(status_code=500, detail="清空历史记录失败")
     except Exception as e:
-        logger.error(f"清空历史记录失败: {str(e)}")
+        logger.error(f"清空历史记录异常: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -274,3 +274,16 @@ class ChatLogService:
                 "active_users": 0,
                 "chat_rounds": 0
             }
+
+    def clear_history(self, user_id: str) -> bool:
+        """清空指定用户的所有聊天记录"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM chat_logs WHERE user_id = ?", (user_id,))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"[ChatLog] 清空历史记录失败: {str(e)}")
+            return False
